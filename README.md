@@ -174,6 +174,48 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 For issues and feature requests, please use the GitHub issue tracker.
 
+## More Frappe Tools
+
+Explore more open-source tools we're building for the Frappe ecosystem.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/frappe-local">
+        <img src="https://raw.githubusercontent.com/lubusIN/frappe-local/main/.github/assets/logo.svg" alt="Frappe Local" height="60">
+      </a>
+      <br>
+      Create and manage local Frappe benches and sites visually.
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/frappe-playground">
+        <img src="https://raw.githubusercontent.com/lubusIN/frappe-playground/main/.github/logo.svg" alt="Frappe Playground" height="60">
+      </a>
+      <br>
+      Run Frappe entirely in your browser.
+    </td>
+  </tr>
+
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/frappe-brewery">
+        <img src="https://raw.githubusercontent.com/lubusIN/frappe-brewery/main/.github/assets/logo.svg" alt="Frappe Brewery" height="60">
+      </a>
+      <br>
+      Discover community-built apps for Frappe.
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://github.com/lubusIN/wp-frappe-data-store">
+        <img src="https://raw.githubusercontent.com/lubusIN/wp-frappe-data-store/main/.github/assets/logo.svg" alt="WP Frappe Data Store" height="60">
+      </a>
+      <br>
+      Connect WordPress and Frappe with a React data store.
+    </td>
+  </tr>
+</table>
+
+[Explore all LUBUS projects →](https://github.com/lubusIN)
+
 ## Meet Your Artisans
 
 [LUBUS](https://lubus.in/?utm_source=github&utm_medium=open-source&utm_campaign=frappe-vault) is a web design agency based in Mumbai.
