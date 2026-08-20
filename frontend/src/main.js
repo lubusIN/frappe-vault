@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import {
   FrappeUI,
   setConfig,
@@ -20,5 +21,6 @@ app.use(resourcesPlugin)
 app.use(pageMetaPlugin)
 app.use(spritePlugin)
 app.use(router)
+app.use(createPinia())
 
 app.mount('#app')
