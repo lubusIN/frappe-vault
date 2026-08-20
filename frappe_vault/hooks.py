@@ -33,6 +33,7 @@ website_route_rules = [
 # Installation & Migration
 after_install = "frappe_vault.setup.install.after_install"
 after_migrate = "frappe_vault.setup.install.after_migrate"
+before_uninstall = "frappe_vault.setup.install.before_uninstall"
 
 # Document Events
 doc_events = {
@@ -44,6 +45,10 @@ doc_events = {
     "Vault Share": {
         "after_insert": "frappe_vault.services.audit_service.log_share_created",
         "on_trash": "frappe_vault.services.audit_service.log_share_removed",
+    },
+    "Email Template": {
+        "validate": "frappe_vault.vault.doctype.email_template_overrides.validate",
+        "on_trash": "frappe_vault.vault.doctype.email_template_overrides.on_trash",
     },
 }
 
