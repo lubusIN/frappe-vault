@@ -23,3 +23,24 @@ class VaultShare(Document):
         """Auto-set the sharing user."""
         if not self.shared_by:
             self.shared_by = frappe.session.user
+
+    def on_trash(self):
+        """Clean up orphaned role overrides if a parent role share is deleted directly."""
+        if self.share_type == "Role" and self.frappe_role:
+            role_users = frappe.get_all(
+                "Has Role", filters={"role": self.frappe_role, "parenttype": "User"}, pluck="parent"
+            )
+            if role_users:
+                overrides = frappe.get_all(
+                    "Vault Share",
+                    filters={
+                        "shared_doctype": self.shared_doctype,
+                        "shared_name": self.shared_name,
+                        "share_type": "User",
+                        "user": ["in", role_users],
+                        "is_role_override": 1,
+                    },
+                    pluck="name",
+                )
+                for override_name in overrides:
+                    frappe.delete_doc("Vault Share", override_name, ignore_permissions=True)
