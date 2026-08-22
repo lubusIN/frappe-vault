@@ -15,6 +15,9 @@ frappe.ui.form.on("Vault Secret", {
 
         // Set up the form based on document state
         frappe_vault.setup_vault_secret_form(frm);
+
+        // Automatic rotation controls
+        frappe_vault.setup_rotation_ui(frm);
     },
 
     secret_type(frm) {
@@ -43,6 +46,78 @@ frappe.ui.form.on("Vault Secret Share", {
         }
     }
 });
+
+// Automatic password rotation: schedule summary + manual trigger.
+// Self-contained so it does not depend on the older helpers in this file.
+frappe_vault.setup_rotation_ui = function(frm) {
+    if (frm.is_new() || frm.doc.secret_type !== "Password") {
+        return;
+    }
+
+    if (frm.doc.enable_rotation && frm.doc.next_rotation_on) {
+        const passphrase_note = frm.doc.has_zip_passphrase
+            ? __(" Its archive opens with this secret's own custom passphrase, not the shared site one.")
+            : "";
+        frm.set_intro(
+            __("Automatic rotation is on. Next rotation {0} — every {1} {2}. A new password will be emailed to everyone with access as an encrypted archive, and will need applying to the target system manually.", [
+                frappe.datetime.str_to_user(frm.doc.next_rotation_on),
+                frm.doc.rotation_interval,
+                frm.doc.rotation_unit ? frm.doc.rotation_unit.toLowerCase() : ""
+            ]) + passphrase_note,
+            "blue"
+        );
+    }
+
+    if (frm.doc.has_zip_passphrase) {
+        frm.add_custom_button(__("Remove Passphrase Protection"), () => {
+            frappe.confirm(
+                __("Remove the custom passphrase from <strong>{0}</strong>? Its rotation archive will go back to opening with the shared site passphrase instead.", [
+                    frappe.utils.escape_html(frm.doc.title)
+                ]),
+                () => {
+                    frappe.call({
+                        method: "frappe_vault.api.secrets.clear_zip_passphrase",
+                        args: { name: frm.doc.name }
+                    }).then((r) => {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({ message: __("Passphrase protection removed"), indicator: "green" });
+                            frm.reload_doc();
+                        }
+                    });
+                }
+            );
+        }, __("Rotation"));
+    }
+
+    if (!frm.doc.enable_rotation) {
+        return;
+    }
+
+    frm.add_custom_button(__("Rotate Now"), () => {
+        frappe.confirm(
+            __("Generate a new password for <strong>{0}</strong> now and email it to everyone with access?<br><br>The current password will be replaced in Vault. It will <strong>not</strong> be changed on the target system — you must apply it there yourself.", [
+                frappe.utils.escape_html(frm.doc.title)
+            ]),
+            () => frappe_vault.run_rotate_now(frm)
+        );
+    }, __("Rotation"));
+};
+
+frappe_vault.run_rotate_now = function(frm) {
+    frappe.dom.freeze(__("Rotating password..."));
+    frappe.call({
+        method: "frappe_vault.api.secrets.rotate_now",
+        args: { name: frm.doc.name }
+    }).then((r) => {
+        frappe.dom.unfreeze();
+        if (r.message && r.message.success) {
+            frappe.show_alert({ message: r.message.message, indicator: "green" });
+            frm.reload_doc();
+        }
+    }).catch(() => {
+        frappe.dom.unfreeze();
+    });
+};
 
 frappe_vault.setup_vault_secret_form = function(frm) {
     // Add password strength indicator to dashboard

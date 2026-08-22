@@ -56,6 +56,18 @@ export function useDeleteSecret() {
   })
 }
 
+export function useRotateNow() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.rotate_now',
+  })
+}
+
+export function useClearZipPassphrase() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.clear_zip_passphrase',
+  })
+}
+
 export function useBulkDeleteSecrets() {
   return createResource({
     url: 'frappe_vault.api.secrets.bulk_delete',

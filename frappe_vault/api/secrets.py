@@ -116,6 +116,57 @@ def decrypt(name: str) -> dict:
 
 
 @frappe.whitelist()
+def rotate_now(name: str) -> dict:
+    """Rotate a secret's password immediately, off the rotation schedule.
+
+    Generates a new password and emails it to everyone with access, exactly as
+    the scheduled job would. If the secret has its own passphrase set, it is
+    retrieved and used automatically — no need to supply it here. Requires
+    write access to the secret.
+    """
+    if not isinstance(name, str):
+        frappe.throw(_("Invalid secret identifier"), frappe.ValidationError)
+
+    from frappe_vault.utils.permissions import has_secret_permission
+
+    if not has_secret_permission(name, ptype="write"):
+        frappe.throw(_("You don't have permission to rotate this secret"), frappe.PermissionError)
+
+    from frappe_vault.background_jobs.password_rotation import rotate_secret
+
+    result = rotate_secret(name)
+
+    return {
+        "success": True,
+        "name": result["name"],
+        "recipients": result["recipients"],
+        "message": _("Password rotated and sent to {0} recipient(s).").format(len(result["recipients"])),
+    }
+
+
+@frappe.whitelist()
+def clear_zip_passphrase(name: str) -> dict:
+    """Remove custom passphrase protection from a secret's rotation archive.
+
+    Restores it to the shared site passphrase and re-enables the unattended
+    hourly rotation job for it. Requires write access to the secret.
+    """
+    if not isinstance(name, str):
+        frappe.throw(_("Invalid secret identifier"), frappe.ValidationError)
+
+    from frappe_vault.utils.permissions import has_secret_permission
+
+    if not has_secret_permission(name, ptype="write"):
+        frappe.throw(_("You don't have permission to modify this secret"), frappe.PermissionError)
+
+    doc = frappe.get_doc("Vault Secret", name)
+    doc.clear_zip_passphrase()
+    doc.save(ignore_permissions=True)
+
+    return {"success": True, "name": name}
+
+
+@frappe.whitelist()
 def get_totp(name: str) -> dict:
     """Get live TOTP code and remaining seconds."""
     if not isinstance(name, str):

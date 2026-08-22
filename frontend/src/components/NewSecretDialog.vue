@@ -86,6 +86,31 @@
           </template>
         </div>
 
+        <!-- Automatic rotation (Password secrets only) -->
+        <div v-if="form.secret_type === 'Password'" class="pt-1 space-y-2">
+          <FormControl type="checkbox" label="Enable Automatic Rotation" v-model="form.enable_rotation" />
+          <p class="text-xs text-ink-gray-5 leading-relaxed">
+            Generate a new password on a schedule and email it to everyone with access as an encrypted archive.
+            Updates the stored value only &mdash; you must apply it to the target system yourself.
+          </p>
+          <div v-if="form.enable_rotation" class="grid grid-cols-2 gap-4 pt-1">
+            <FormControl label="Rotate Every" type="number" min="1" v-model="form.rotation_interval" />
+            <FormControl label="Interval Unit" type="select" v-model="form.rotation_unit" :options="ROTATION_UNITS" />
+          </div>
+
+          <FormControl
+            v-if="form.enable_rotation"
+            label="Custom Rotation Passphrase (optional)"
+            v-model="form.zip_passphrase"
+            :type="showSecrets ? 'text' : 'password'"
+            placeholder="Leave blank to use the shared site passphrase"
+          />
+          <p v-if="form.enable_rotation" class="text-xs text-ink-gray-5 leading-relaxed">
+            Stored encrypted, the same way as this secret's own password. Used automatically when this
+            secret rotates, so its archive opens with your passphrase instead of the shared site one.
+          </p>
+        </div>
+
         <FormControl label="Notes" type="textarea" v-model="form.notes" :rows="3" />
       </div>
     </template>
@@ -99,7 +124,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { Dialog, FormControl, Button, FeatherIcon, toast } from 'frappe-ui'
-import { SECRET_TYPES } from '../composables/constants'
+import { SECRET_TYPES, ROTATION_UNITS } from '../composables/constants'
 import { secretFieldsConfig } from '../composables/secretFields'
 import { useFolders, useCreateSecret } from '../composables/vault'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
@@ -133,6 +158,7 @@ const defaultForm = () => ({
   title: '', secret_type: 'Password', folder: props.initialFolder || '', url: '', username: '', email: '',
   password: '', totp_secret: '', api_key: '', api_secret: '', ssh_private_key: '', attachment: '', notes: '', card_holder: '', card_number: '',
   card_expiry: '', card_cvv: '', db_host: '', db_port: '', db_name: '', db_password: '',
+  enable_rotation: 0, rotation_interval: 90, rotation_unit: 'Days', zip_passphrase: '',
 })
 
 const form = ref(defaultForm())
@@ -216,8 +242,23 @@ async function handleCreate() {
     }
   }
 
+  const payload = { ...form.value }
+
+  // Rotation only applies to Password secrets — the backend rejects it otherwise,
+  // and the flag can survive a secret_type switch after the box was ticked.
+  if (payload.secret_type === 'Password' && payload.enable_rotation) {
+    payload.enable_rotation = 1
+    payload.rotation_interval = Number(payload.rotation_interval) || 90
+    if (!payload.zip_passphrase) delete payload.zip_passphrase
+  } else {
+    payload.enable_rotation = 0
+    delete payload.rotation_interval
+    delete payload.rotation_unit
+    delete payload.zip_passphrase
+  }
+
   try {
-    const result = await createResource.submit(form.value)
+    const result = await createResource.submit(payload)
     window.dispatchEvent(new CustomEvent('vault-secret-updated', { detail: { name: result?.name } }))
     emit('created', result)
   } catch (err) {

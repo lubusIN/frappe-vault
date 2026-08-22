@@ -311,6 +311,120 @@ def has_secret_permission(doc, ptype="read", user=None):
     return False
 
 
+def get_users_with_secret_access(secret_name, include_admins=False):
+    """Return the users who have been granted access to a specific secret.
+
+    This is the inverse of `get_secret_permission_query` — same access model,
+    resolved forwards from a secret to its people instead of backwards from a
+    user to their secrets. Keep the two in step.
+
+    Included: the secret's owner, its folder's owner, and the holders of any
+    active (non-revoked, unexpired) Vault Share on either the secret or its
+    folder — for `User` shares directly, and for `Role` shares by expanding the
+    role's members.
+
+    A role member's access can be individually revoked without touching the
+    role share itself, via a per-user override row (`is_role_override=1,
+    is_revoked=1`) scoped to either the secret or its folder — exactly the two
+    `NOT EXISTS` checks in `get_secret_permission_query`. Both are excluded
+    here too. Ownership is never subject to this: an owner or folder owner is
+    always included regardless of any stray/override share row.
+
+    Vault Admins and System Managers are excluded by default. The role bypass
+    lets them read every secret, but they were not "given access" to any
+    particular one, and including them would mail them every rotation in the
+    system. Pass include_admins=True to add them.
+
+    Only enabled users with an email address are returned; Guest never is.
+
+    Args:
+        secret_name: Vault Secret document name
+        include_admins: also return Vault Admin / System Manager users
+
+    Returns:
+        Sorted list of user IDs
+    """
+    secret = frappe.db.get_value("Vault Secret", secret_name, ["owner", "folder"], as_dict=True)
+    if not secret:
+        return []
+
+    always_included = {u for u in (secret.owner,) if u}
+    if secret.folder:
+        folder_owner = frappe.db.get_value("Vault Folder", secret.folder, "owner")
+        if folder_owner:
+            always_included.add(folder_owner)
+
+    candidates = set(always_included)
+
+    # Active shares on the secret itself or on the folder containing it.
+    shares = frappe.db.sql(
+        """
+        SELECT share_type, user, frappe_role
+        FROM `tabVault Share`
+        WHERE is_revoked = 0
+          AND (expires_on IS NULL OR expires_on > NOW())
+          AND (
+              (shared_doctype = 'Vault Secret' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
+          )
+    """,
+        (secret_name, secret.folder or ""),
+        as_dict=True,
+    )
+
+    roles = {s.frappe_role for s in shares if s.share_type == "Role" and s.frappe_role}
+    candidates.update(s.user for s in shares if s.share_type == "User" and s.user)
+
+    if roles:
+        candidates.update(
+            frappe.get_all(
+                "Has Role",
+                filters={"role": ["in", list(roles)], "parenttype": "User"},
+                pluck="parent",
+            )
+        )
+
+    if include_admins:
+        candidates.update(
+            frappe.get_all(
+                "Has Role",
+                filters={"role": ["in", ["Vault Admin", "System Manager"]], "parenttype": "User"},
+                pluck="parent",
+            )
+        )
+
+    # A revoked User-type share on either the secret or its folder overrides
+    # any role-derived (or stray direct) grant — same scope as the two
+    # NOT EXISTS checks in get_secret_permission_query.
+    revoked = set(
+        frappe.get_all(
+            "Vault Share",
+            filters={
+                "share_type": "User",
+                "is_revoked": 1,
+                "shared_name": ["in", [n for n in (secret_name, secret.folder) if n]],
+            },
+            pluck="user",
+        )
+    )
+    candidates -= revoked
+    candidates |= always_included
+    candidates.discard("Guest")
+    candidates.discard(None)
+
+    if not candidates:
+        return []
+
+    # Only users who can actually receive mail.
+    deliverable = frappe.get_all(
+        "User",
+        filters={"name": ["in", list(candidates)], "enabled": 1},
+        fields=["name", "email"],
+    )
+
+    return sorted(u.name for u in deliverable if u.email)
+
+
 def get_folder_permission_query(user=None):
     """Return SQL condition to filter Vault Folders for current user."""
     if not user:

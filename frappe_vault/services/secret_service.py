@@ -257,6 +257,14 @@ def get_secret(name: str, decrypt: bool = False) -> dict:
         "last_accessed": str(doc.last_accessed) if doc.last_accessed else None,
         "access_count": doc.access_count,
         "expires_on": str(doc.expires_on) if doc.expires_on else None,
+        "enable_rotation": doc.enable_rotation,
+        "rotation_interval": doc.rotation_interval,
+        "rotation_unit": doc.rotation_unit,
+        "last_rotated_on": str(doc.last_rotated_on) if doc.last_rotated_on else None,
+        "next_rotation_on": str(doc.next_rotation_on) if doc.next_rotation_on else None,
+        # Status flag only — zip_passphrase itself is never sent to the client,
+        # same as password/api_secret/db_password never being included here.
+        "has_zip_passphrase": doc.has_zip_passphrase,
         "owner": doc.owner,
         "shared_by": shared_by,
         "modified": str(doc.modified),
@@ -514,6 +522,10 @@ def update_secret(name: str, data: dict) -> dict:
         "db_password",
         "expires_on",
         "custom_fields_json",
+        "enable_rotation",
+        "rotation_interval",
+        "rotation_unit",
+        "zip_passphrase",
     ]
 
     for field, value in data.items():

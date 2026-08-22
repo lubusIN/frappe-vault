@@ -105,6 +105,46 @@
           </template>
         </div>
 
+        <!-- Automatic rotation (Password secrets only) -->
+        <div v-if="editForm.secret_type === 'Password'" class="pt-3 border-t border-outline-gray-1 space-y-2">
+          <FormControl type="checkbox" label="Enable Automatic Rotation" v-model="editForm.enable_rotation" />
+          <p class="text-xs text-ink-gray-5 leading-relaxed">
+            Generate a new password on a schedule and email it to everyone with access as an encrypted
+            archive. Updates the stored value only &mdash; you must apply it to the target system yourself.
+          </p>
+          <div v-if="editForm.enable_rotation" class="grid grid-cols-2 gap-4 pt-1">
+            <FormControl label="Rotate Every" type="number" min="1" v-model="editForm.rotation_interval" class="w-full text-sm" />
+            <FormControl label="Interval Unit" type="select" v-model="editForm.rotation_unit" :options="ROTATION_UNITS" class="w-full text-sm cursor-pointer" />
+          </div>
+
+          <template v-if="editForm.enable_rotation">
+            <div v-if="secretData.has_zip_passphrase" class="flex items-center justify-between gap-2 pt-1">
+              <p class="text-xs text-ink-gray-6">
+                <FeatherIcon name="lock" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                Passphrase protection is ON. Leave the field below blank to keep it.
+              </p>
+              <Button variant="ghost" size="xs" class="text-xs text-ink-red-4 shrink-0" @click="handleRemovePassphrase">
+                Remove
+              </Button>
+            </div>
+            <FormControl
+              label="Custom Rotation Passphrase (optional)"
+              v-model="editForm.zip_passphrase"
+              :type="editRevealedFields.zip_passphrase ? 'text' : 'password'"
+              :placeholder="secretData.has_zip_passphrase ? 'Leave blank to keep current passphrase' : 'Leave blank to use the shared site passphrase'"
+              class="w-full text-sm"
+            >
+              <template #suffix>
+                <Button variant="ghost" :icon="editRevealedFields.zip_passphrase ? 'lucide-eye-off' : 'lucide-eye'" class="!p-1 h-auto text-ink-gray-4 hover:text-ink-gray-9 focus:outline-none" @click="toggleField('zip_passphrase', true)" />
+              </template>
+            </FormControl>
+            <p class="text-xs text-ink-gray-5 leading-relaxed">
+              Stored encrypted, the same way as this secret's own password. Used automatically when this
+              secret rotates, so its archive opens with your passphrase instead of the shared site one.
+            </p>
+          </template>
+        </div>
+
         <!-- Notes input -->
         <div class="pt-2">
           <FormControl type="textarea" label="Notes" v-model="editForm.notes" :rows="3" placeholder="Enter notes..." class="w-full text-sm" />
@@ -131,6 +171,29 @@
           <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">
             {{ getFolderName(secretData.folder) || '—' }}
           </span>
+        </div>
+
+        <!-- Rotation schedule -->
+        <div v-if="secretData.enable_rotation" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Rotation</span>
+          <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">
+            Every {{ secretData.rotation_interval }} {{ (secretData.rotation_unit || 'Days').toLowerCase() }}
+            <span v-if="secretData.next_rotation_on" class="text-ink-gray-5 font-normal">
+              &middot; next {{ formatRelativeTime(secretData.next_rotation_on) }}
+            </span>
+          </span>
+        </div>
+
+        <div v-if="secretData.enable_rotation && secretData.has_zip_passphrase" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Protection</span>
+          <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">
+            <FeatherIcon name="lock" class="w-3 h-3 inline -mt-0.5 mr-1" />
+            Custom archive passphrase
+          </span>
+        </div>
+
+        <div v-if="secretData.enable_rotation && canEdit" class="flex justify-end pt-1">
+          <Button variant="outline" size="sm" icon="lucide-refresh-cw" label="Rotate Now" @click="$emit('open-rotate')" />
         </div>
 
         <!-- Dynamic Fields Array -->
@@ -291,9 +354,10 @@ import { useClipboard } from '../composables/clipboard'
 import {
   useDecryptSecret,
   useUpdateSecret,
-  useFolders
+  useFolders,
+  useClearZipPassphrase,
 } from '../composables/vault'
-import { secretTypeOptions } from '../composables/constants'
+import { secretTypeOptions, ROTATION_UNITS, formatRelativeTime } from '../composables/constants'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
 import { validateTotpSecret } from '../utils/secretForm'
 
@@ -304,13 +368,14 @@ const props = defineProps({
   canCopy: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['open-totp', 'saved'])
+const emit = defineEmits(['open-totp', 'open-rotate', 'saved'])
 
 const detailsOpen = ref(true)
 const isEditing = ref(false)
 
 const decryptResource = useDecryptSecret()
 const updateResource = useUpdateSecret()
+const clearPassphraseResource = useClearZipPassphrase()
 const folders = useFolders()
 const clipboard = useClipboard()
 
@@ -362,6 +427,10 @@ const editForm = reactive({
   db_password: '',
   ssh_private_key: '',
   attachment: '',
+  enable_rotation: 0,
+  rotation_interval: 90,
+  rotation_unit: 'Days',
+  zip_passphrase: '',
 })
 
 const decryptedData = computed(() => decryptResource.data?.decrypted)
@@ -476,6 +545,11 @@ async function toggleEditMode() {
     editForm.db_name = sd.db_name || ''
     editForm.db_password = dd.db_password || ''
     editForm.ssh_private_key = sd.ssh_private_key || ''
+    editForm.enable_rotation = sd.enable_rotation ? 1 : 0
+    editForm.rotation_interval = sd.rotation_interval || 90
+    editForm.rotation_unit = sd.rotation_unit || 'Days'
+    // Never returned by the server (it's encrypted) — always starts blank.
+    editForm.zip_passphrase = ''
 
     editAttachmentList.value = parseAttachments(sd.attachment)
     syncEditAttachmentForm()
@@ -588,6 +662,16 @@ async function handleSave() {
       payload.password = editForm.password
       payload.totp_secret = editForm.totp_secret
       payload.url = editForm.url
+      payload.enable_rotation = editForm.enable_rotation ? 1 : 0
+      if (editForm.enable_rotation) {
+        payload.rotation_interval = Number(editForm.rotation_interval) || 90
+        payload.rotation_unit = editForm.rotation_unit || 'Days'
+        // Blank means "leave whatever's already set (or unset) alone" —
+        // only send it when the owner actually typed a new one.
+        if (editForm.zip_passphrase) {
+          payload.zip_passphrase = editForm.zip_passphrase
+        }
+      }
     } else if (editForm.secret_type === 'API Key') {
       payload.api_key = editForm.api_key
       payload.api_secret = editForm.api_secret
@@ -627,6 +711,17 @@ async function handleSave() {
     } else {
       toast.error(err.message || 'Failed to save changes')
     }
+  }
+}
+
+async function handleRemovePassphrase() {
+  try {
+    await clearPassphraseResource.submit({ name: props.name })
+    toast.success('Passphrase protection removed')
+    editForm.zip_passphrase = ''
+    emit('saved')
+  } catch (err) {
+    toast.error(err.messages?.[0] || err.message || 'Failed to remove passphrase')
   }
 }
 

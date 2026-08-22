@@ -23,7 +23,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Action",
-   "options": "Viewed\nCreated\nUpdated\nDeleted\nShared\nUnshared\nCopied\nGenerated\nExported\nImported\nLogin",
+   "options": "Viewed\nCreated\nUpdated\nDeleted\nShared\nUnshared\nCopied\nGenerated\nExported\nImported\nLogin\nRotated",
    "read_only": 1,
    "reqd": 1
   },

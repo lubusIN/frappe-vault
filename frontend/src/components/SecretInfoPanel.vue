@@ -38,6 +38,18 @@
         <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Last Changed</span>
         <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">{{ formatDateOnly(secretData.password_last_changed) }}</span>
       </div>
+
+      <template v-if="secretData.enable_rotation">
+        <div v-if="secretData.last_rotated_on" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Last Rotated</span>
+          <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">{{ formatDateOnly(secretData.last_rotated_on) }}</span>
+        </div>
+
+        <div v-if="secretData.next_rotation_on" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Next Rotation</span>
+          <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">{{ formatRelativeTime(secretData.next_rotation_on) }}</span>
+        </div>
+      </template>
     </div>
   </article>
 </template>
@@ -46,7 +58,7 @@
 import { ref } from 'vue'
 import { FeatherIcon } from 'frappe-ui'
 import StrengthBadge from './StrengthBadge.vue'
-import { formatDateOnly } from '../composables/constants'
+import { formatDateOnly, formatRelativeTime } from '../composables/constants'
 
 const props = defineProps({
   secretData: {

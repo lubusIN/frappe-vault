@@ -47,6 +47,7 @@
               :can-edit="canEdit"
               :can-copy="canCopy"
               @open-totp="showTotpDialog = true"
+              @open-rotate="openRotateDialog"
               @saved="handleSecretSaved"
             />
 
@@ -97,8 +98,36 @@
       </template>
     </Dialog>
 
-
-
+    <!-- Rotate Now Dialog -->
+    <Dialog
+      v-model="showRotateDialog"
+      :options="{
+        title: 'Rotate ' + (secretData?.title || 'Secret'),
+        size: 'sm',
+      }"
+    >
+      <template #body-content>
+        <div class="space-y-3">
+          <p class="text-sm text-ink-gray-6 leading-normal">
+            Generate a new password now and email it to everyone with access
+            <span v-if="secretData?.has_zip_passphrase">, as an archive opened with this secret's custom passphrase</span>.
+            The current password is replaced in Vault only &mdash; it is <strong>not</strong> changed on the
+            target system, you must apply it there yourself.
+          </p>
+          <ErrorMessage v-if="rotateError" :message="rotateError" />
+        </div>
+      </template>
+      <template #actions>
+        <div class="flex items-center justify-end gap-2 px-4 pb-4">
+          <Button variant="outline" @click="showRotateDialog = false" class="text-ink-gray-7 hover:bg-surface-gray-2">
+            Cancel
+          </Button>
+          <Button variant="solid" @click="handleRotateNow" :loading="rotateNowResource.loading" class="font-semibold shadow-sm px-4">
+            Rotate
+          </Button>
+        </div>
+      </template>
+    </Dialog>
 
     <!-- TOTP Dialog -->
     <TotpDialog
@@ -121,7 +150,7 @@ import {
   PageHeaderTitle,
   ScrollArea,
 } from 'frappe-ui'
-import { useSecret, useDeleteSecret, useVaultStats } from '../composables/vault'
+import { useSecret, useDeleteSecret, useVaultStats, useRotateNow } from '../composables/vault'
 import { useClipboard } from '../composables/clipboard'
 import SecretActivitySidebar from '../components/SecretActivitySidebar.vue'
 import SecretDetailsPanel from '../components/SecretDetailsPanel.vue'
@@ -193,6 +222,7 @@ function copyToClipboard(text) {
 // --- Resources ---
 const secret = useSecret(props.name)
 const deleteResource = useDeleteSecret()
+const rotateNowResource = useRotateNow()
 const stats = useVaultStats()
 
 const secretData = computed(() => secret.data)
@@ -258,6 +288,27 @@ async function confirmDelete() {
   } catch (err) {
     deleteError.value = err.messages?.[0] || err.message || 'Failed to delete secret'
     toast.error(deleteError.value)
+  }
+}
+
+// --- Rotate Now ---
+const showRotateDialog = ref(false)
+const rotateError = ref('')
+
+function openRotateDialog() {
+  rotateError.value = ''
+  showRotateDialog.value = true
+}
+
+async function handleRotateNow() {
+  rotateError.value = ''
+  try {
+    const result = await rotateNowResource.submit({ name: props.name })
+    showRotateDialog.value = false
+    toast.success(result.message || 'Password rotated')
+    window.dispatchEvent(new CustomEvent('vault-secret-updated', { detail: { name: props.name } }))
+  } catch (err) {
+    rotateError.value = err.messages?.[0] || err.message || 'Failed to rotate password'
   }
 }
 

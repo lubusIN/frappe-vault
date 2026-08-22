@@ -59,6 +59,11 @@ scheduler_events = {
     "hourly": [
         "frappe_vault.background_jobs.link_cleanup.cleanup_expired_links",
     ],
+    # Hourly granularity is required for the "Hours" rotation unit to mean
+    # anything; _long keeps archive building and mail queueing off the short queue.
+    "hourly_long": [
+        "frappe_vault.background_jobs.password_rotation.run_password_rotation",
+    ],
 }
 
 # Permissions — row-level filtering
