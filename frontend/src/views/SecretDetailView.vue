@@ -113,7 +113,12 @@
             Generate a new password now. Everyone with access is notified, and can read the new value
             here on this page.
           </p>
-          <p v-if="secretData?.apply_rotation_to_target" class="text-sm text-ink-gray-6 leading-normal">
+          <p v-if="secretData?.secret_type === 'Linux Server' && secretData?.apply_rotation_to_target" class="text-sm text-ink-gray-6 leading-normal">
+            The password will also be changed on <strong>{{ linuxHostSummary }}</strong>. Anything still
+            connecting with the old password will start failing until it is updated. If any host cannot be
+            reached, nothing is changed anywhere &mdash; Vault and the servers only ever move together.
+          </p>
+          <p v-else-if="secretData?.apply_rotation_to_target" class="text-sm text-ink-gray-6 leading-normal">
             The password will also be changed on the live
             <strong>{{ secretData?.database_type || 'database' }}</strong> at
             <strong>{{ secretData?.db_host }}</strong>. Anything still connecting with the old password
@@ -236,6 +241,17 @@ const rotateNowResource = useRotateNow()
 const stats = useVaultStats()
 
 const secretData = computed(() => secret.data)
+
+// Names the hosts a Linux Server rotation would apply to, for the Rotate Now
+// confirmation dialog. Database secrets have exactly one host (db_host) built
+// into the copy already; Linux secrets can have many.
+const linuxHostSummary = computed(() => {
+  const hosts = (secretData.value?.linux_hosts || []).map(h => h.hostname).filter(Boolean)
+  if (hosts.length === 0) return 'the server'
+  if (hosts.length === 1) return hosts[0]
+  if (hosts.length === 2) return `${hosts[0]} and ${hosts[1]}`
+  return `${hosts.slice(0, -1).join(', ')}, and ${hosts[hosts.length - 1]}`
+})
 
 // --- Permissions ---
 const currentSessionUser = computed(() => {

@@ -121,10 +121,11 @@ def rotate_now(name: str) -> dict:
     """Rotate a secret's password immediately, off the rotation schedule.
 
     Generates a new password exactly as the scheduled job would — including
-    applying it to the live server when a Database secret is configured to do
-    that. Everyone with access is notified in-app, and emailed an encrypted
-    archive as well if Vault Settings has 'Email Rotated Passwords' enabled.
-    Requires write access to the secret.
+    applying it to the live server(s) for Database and Linux Server secrets,
+    which always keep the vault and the real system in sync. Everyone with
+    access is notified in-app, and emailed an encrypted archive as well if
+    Vault Settings has 'Email Rotated Passwords' enabled. Requires write
+    access to the secret.
     """
     if not isinstance(name, str):
         frappe.throw(_("Invalid secret identifier"), frappe.ValidationError)
