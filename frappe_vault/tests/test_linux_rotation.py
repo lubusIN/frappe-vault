@@ -3,8 +3,9 @@
 Nothing here contacts a real host — reaching live machines over SSH is manual
 territory. What is covered is everything that decides *whether* and *how* a run
 would be made: which hosts are in the inventory, that the automation credential
-cannot be the account being rotated, that the secret never reaches a command
-line, and that a partial failure is treated as a failure.
+cannot be the account being rotated, that only key-based access is accepted,
+that the secret never reaches a command line, and that a partial failure is
+treated as a failure.
 """
 
 import json
@@ -14,8 +15,6 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from frappe_vault.services.linux_rotation_service import (
-    KEY_AUTH,
-    PASSWORD_AUTH,
     HostOutcome,
     LinuxApplyError,
     RunResult,
@@ -46,7 +45,6 @@ def make_linux_secret(**kwargs):
             "username": "svc_account",
             "password": "InitialLinuxPassword123!",
             "ansible_user": "automation",
-            "ansible_auth_method": KEY_AUTH,
             "ansible_ssh_private_key": FAKE_KEY,
             "linux_hosts": hosts,
             **kwargs,
@@ -61,7 +59,6 @@ def make_target(**kwargs):
         username="svc_account",
         hosts=[{"hostname": "vm1.example", "ssh_port": 22}],
         ansible_user="automation",
-        auth_method=KEY_AUTH,
         ssh_private_key=FAKE_KEY,
     )
     base.update(kwargs)
@@ -128,7 +125,7 @@ class TestLinuxTarget(FrappeTestCase):
             make_linux_secret(title="Linux Rotation Invalid Secret", hosts=[])
 
     # ------------------------------------------------------------------
-    # The automation credential
+    # The automation credential — SSH key only
     # ------------------------------------------------------------------
 
     def test_the_ansible_user_may_not_be_the_rotated_account(self):
@@ -140,17 +137,26 @@ class TestLinuxTarget(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             make_linux_secret(title="Linux Rotation Invalid Secret", ansible_user="svc_account")
 
-    def test_key_auth_requires_a_key(self):
+    def test_a_missing_key_is_refused(self):
         with self.assertRaises(LinuxApplyError):
-            make_target(auth_method=KEY_AUTH, ssh_private_key="")
+            make_target(ssh_private_key="")
 
-    def test_password_auth_requires_a_password(self):
-        with self.assertRaises(LinuxApplyError):
-            make_target(auth_method=PASSWORD_AUTH, ssh_private_key=None, ansible_password="")
+    def test_a_missing_key_is_refused_at_save_time_too(self):
+        with self.assertRaises(frappe.ValidationError):
+            make_linux_secret(title="Linux Rotation Invalid Secret", ansible_ssh_private_key="")
 
-    def test_an_unknown_auth_method_is_refused(self):
-        with self.assertRaises(LinuxApplyError):
-            make_target(auth_method="Kerberos")
+    def test_no_password_based_ssh_option_exists(self):
+        # There is deliberately no auth-method parameter to make_linux_target any
+        # more — password-based access to the automation account is not a choice
+        # this module offers, so passing one is simply a TypeError, not a
+        # validation branch to test.
+        with self.assertRaises(TypeError):
+            make_linux_target(
+                username="svc_account",
+                hosts=[{"hostname": "vm1.example"}],
+                ansible_user="automation",
+                ansible_password="whatever",
+            )
 
     def test_a_saved_secret_resolves_into_a_target(self):
         doc = make_linux_secret(
@@ -182,33 +188,32 @@ class TestLinuxTarget(FrappeTestCase):
     # ------------------------------------------------------------------
 
     def test_describe_names_hosts_without_leaking_credentials(self):
-        target = make_target(ansible_password="SuperSecret", auth_method=PASSWORD_AUTH, ssh_private_key=None)
+        target = make_target()
         described = target.describe()
 
         self.assertIn("vm1.example", described)
-        self.assertNotIn("SuperSecret", described)
+        self.assertNotIn(FAKE_KEY, described)
 
-    def test_connection_secrets_live_in_the_inventory_not_the_argv(self):
+    def test_the_key_lives_in_a_private_file_not_the_argv(self):
+        import shutil
         import tempfile
 
         workdir = tempfile.mkdtemp()
         try:
-            target = make_target(
-                auth_method=PASSWORD_AUTH,
-                ssh_private_key=None,
-                ansible_password="SshSecret123",
-                become_password="SudoSecret123",
-            )
+            target = make_target(become_password="SudoSecret123")
             inventory = _build_inventory(target, workdir)
 
-            # Present in the 0600 inventory file...
-            self.assertIn("SshSecret123", inventory)
+            # The inventory only ever references the key by file path.
+            self.assertNotIn(FAKE_KEY, inventory)
+            self.assertIn("ansible_ssh_private_key_file", inventory)
+            # A sudo password is a connection secret too, and lives here, not
+            # in the environment handed to the subprocess.
             self.assertIn("SudoSecret123", inventory)
-            # ...and the environment carries none of it.
-            self.assertNotIn("SshSecret123", json.dumps(_build_env(target, workdir)))
-        finally:
-            import shutil
+            self.assertNotIn("SudoSecret123", json.dumps(_build_env(target, workdir)))
 
+            with open(os.path.join(workdir, "id_key")) as fh:
+                self.assertIn("fakekeymaterial", fh.read())
+        finally:
             shutil.rmtree(workdir, ignore_errors=True)
 
     def test_the_private_key_file_is_not_world_readable(self):
@@ -295,3 +300,55 @@ class TestLinuxTarget(FrappeTestCase):
             ]
         )
         self.assertIn("2 of 3", result.summary())
+
+
+class TestLinuxConnectionEndpoint(FrappeTestCase):
+    """The pre-save reachability check.
+
+    Only the paths that refuse *before* any SSH is attempted are exercised —
+    anything that would actually dial a host belongs in manual testing.
+    """
+
+    def test_a_bad_host_list_is_rejected(self):
+        from frappe_vault.api.secrets import test_linux_connection_params
+
+        with self.assertRaises(frappe.ValidationError):
+            test_linux_connection_params(
+                username="svc_account",
+                hosts="not-a-list",
+                ansible_user="automation",
+                ansible_ssh_private_key=FAKE_KEY,
+            )
+
+    def test_an_empty_inventory_is_rejected_before_dialling(self):
+        from frappe_vault.api.secrets import test_linux_connection_params
+
+        with self.assertRaises(LinuxApplyError):
+            test_linux_connection_params(
+                username="svc_account",
+                hosts="[]",
+                ansible_user="automation",
+                ansible_ssh_private_key=FAKE_KEY,
+            )
+
+    def test_rotating_the_automation_account_is_rejected_before_dialling(self):
+        from frappe_vault.api.secrets import test_linux_connection_params
+
+        with self.assertRaises(LinuxApplyError):
+            test_linux_connection_params(
+                username="automation",
+                hosts=json.dumps([{"hostname": "vm1.example"}]),
+                ansible_user="automation",
+                ansible_ssh_private_key=FAKE_KEY,
+            )
+
+    def test_a_missing_key_is_rejected_before_dialling(self):
+        from frappe_vault.api.secrets import test_linux_connection_params
+
+        with self.assertRaises(LinuxApplyError):
+            test_linux_connection_params(
+                username="svc_account",
+                hosts=json.dumps([{"hostname": "vm1.example"}]),
+                ansible_user="automation",
+                ansible_ssh_private_key="",
+            )

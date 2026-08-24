@@ -6,6 +6,7 @@ export const SECRET_TYPES = [
   'Media',
   'Credit Card',
   'Database',
+  'Linux Server',
   'Other',
 ]
 
@@ -35,7 +36,12 @@ export const DATABASE_DEFAULT_PORTS = {
 }
 
 // Secret types whose password the rotation job knows how to regenerate.
-export const ROTATABLE_SECRET_TYPES = ['Password', 'Database']
+export const ROTATABLE_SECRET_TYPES = ['Password', 'Database', 'Linux Server']
+
+// Types whose rotation always reaches the real system it belongs to, so the
+// vault and the server can never disagree. Not optional — see SYNCED_TYPES in
+// the Vault Secret controller.
+export const SYNCED_SECRET_TYPES = ['Database', 'Linux Server']
 
 export const typeIcons = {
   Password: 'key',
@@ -45,6 +51,7 @@ export const typeIcons = {
   Media: 'paperclip',
   'Credit Card': 'credit-card',
   Database: 'database',
+  'Linux Server': 'server',
   Other: 'file',
 }
 
@@ -56,6 +63,7 @@ export const typeColors = {
   Media: 'bg-teal-100 text-teal-600 dark:bg-teal-950 dark:text-teal-400',
   'Credit Card': 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400',
   Database: 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400',
+  'Linux Server': 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400',
   Other: 'bg-surface-gray-3 text-ink-gray-6 dark:bg-surface-gray-4 dark:text-ink-gray-4',
 }
 
@@ -67,6 +75,7 @@ export const typeMeta = {
   Media: { icon: 'paperclip', bg: 'bg-teal-50 text-teal-600 border-teal-100 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-900', color: 'text-teal-600 dark:text-teal-400' },
   'Credit Card': { icon: 'credit-card', bg: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-900', color: 'text-blue-600 dark:text-blue-400' },
   Database: { icon: 'database', bg: 'bg-cyan-50 text-cyan-600 border-cyan-100 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-900', color: 'text-cyan-600 dark:text-cyan-400' },
+  'Linux Server': { icon: 'server', bg: 'bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-950 dark:text-indigo-400 dark:border-indigo-900', color: 'text-indigo-600 dark:text-indigo-400' },
   Other: { icon: 'lock', bg: 'bg-pink-50 text-pink-600 border-pink-100 dark:bg-pink-950 dark:text-pink-400 dark:border-pink-900', color: 'text-pink-600 dark:text-pink-400' },
 }
 

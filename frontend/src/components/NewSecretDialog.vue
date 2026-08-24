@@ -8,6 +8,148 @@
 
         <FormControl label="Folder" type="select" v-model="form.folder" :options="folderOptions" />
 
+        <!-- Guided Linux flow: hosts -> automation access -> test -> password.
+             One host row rotates a single VM; many rotate together, and the
+             password is only stored once every host has accepted it. -->
+        <template v-if="form.secret_type === 'Linux Server'">
+          <div class="space-y-4">
+            <!-- 1. Which machines -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">
+                  Servers <span class="text-ink-gray-4 normal-case font-normal">({{ form.linux_hosts.length }})</span>
+                </p>
+                <div class="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" label="Paste list" @click="showBulkHosts = !showBulkHosts" />
+                  <Button variant="subtle" size="sm" icon-left="plus" label="Add host" @click="addHost()" />
+                </div>
+              </div>
+
+              <div v-if="showBulkHosts" class="space-y-2">
+                <FormControl
+                  type="textarea"
+                  :rows="4"
+                  v-model="bulkHosts"
+                  placeholder="One host per line. host:port is accepted — e.g.&#10;web01.internal&#10;web02.internal:2222&#10;10.0.0.15"
+                />
+                <div class="flex justify-end">
+                  <Button variant="subtle" size="sm" label="Add these hosts" @click="applyBulkHosts" />
+                </div>
+              </div>
+
+              <div v-if="form.linux_hosts.length" class="space-y-2">
+                <div v-for="(host, hIdx) in form.linux_hosts" :key="hIdx" class="flex items-center gap-2">
+                  <FormControl class="flex-1" v-model="host.hostname" placeholder="hostname or IP" />
+                  <FormControl class="w-24" v-model="host.ssh_port" placeholder="22" />
+                  <Button
+                    variant="ghost" icon="x" class="!p-1 h-auto text-ink-gray-5 hover:text-ink-red-3"
+                    title="Remove host" @click="form.linux_hosts.splice(hIdx, 1)"
+                  />
+                </div>
+              </div>
+              <p v-else class="text-xs text-ink-gray-5">
+                Add at least one host. The same password is set on every machine listed here.
+              </p>
+            </div>
+
+            <!-- 2. How Vault reaches them -->
+            <div class="pt-2 border-t border-outline-gray-1 space-y-3">
+              <p class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">Automation Access</p>
+              <p class="text-xs text-ink-gray-5 leading-relaxed">
+                The account Vault connects as over SSH, by key only &mdash; never a password, so there is
+                no SSH credential for this account sitting in the vault. It must not be the account being
+                rotated, or changing its own password would lock Vault out of these hosts.
+              </p>
+              <FormControl label="Ansible User" v-model="form.ansible_user" placeholder="ansible / deploy" />
+
+              <FormControl
+                type="textarea" :rows="4" label="SSH Private Key"
+                v-model="form.ansible_ssh_private_key"
+                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
+                class="font-mono text-xs"
+              />
+
+              <div class="grid grid-cols-2 gap-4">
+                <FormControl type="checkbox" label="Use sudo (become)" v-model="form.ansible_use_become" />
+                <FormControl type="checkbox" label="Strict host key checking" v-model="form.strict_host_key_checking" />
+              </div>
+              <FormControl
+                v-if="form.ansible_use_become"
+                label="sudo Password (blank if passwordless)"
+                v-model="form.ansible_become_password"
+                :type="showSecrets ? 'text' : 'password'"
+              />
+              <p v-if="!form.strict_host_key_checking" class="text-xs text-ink-amber-6 leading-relaxed">
+                <FeatherIcon name="alert-triangle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                With host key checking off, Vault will push this password to whatever answers at those
+                addresses &mdash; including a machine impersonating your server.
+              </p>
+            </div>
+
+            <!-- 3. Prove it works -->
+            <div class="space-y-2">
+              <div class="flex items-center gap-3">
+                <Button
+                  variant="subtle" icon-left="lucide-plug" label="Test Connection"
+                  :loading="linuxTestResource.loading" @click="handleTestLinux"
+                />
+                <span v-if="testState === 'passed'" class="text-xs font-medium text-ink-green-3">
+                  <FeatherIcon name="check-circle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />All hosts reachable
+                </span>
+                <span v-else-if="testState === 'failed'" class="text-xs font-medium text-ink-red-3">
+                  <FeatherIcon name="x-circle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Not reachable
+                </span>
+              </div>
+              <p v-if="testMessage" class="text-xs leading-relaxed" :class="testState === 'passed' ? 'text-ink-gray-6' : 'text-ink-red-3'">
+                {{ testMessage }}
+              </p>
+              <div v-if="hostResults.length" class="space-y-1">
+                <div v-for="h in hostResults" :key="h.hostname" class="flex items-start gap-2 text-xs">
+                  <FeatherIcon :name="h.ok ? 'check' : 'x'" class="w-3.5 h-3.5 mt-0.5 shrink-0" :class="h.ok ? 'text-ink-green-3' : 'text-ink-red-3'" />
+                  <span class="font-mono text-ink-gray-7 shrink-0">{{ h.hostname }}</span>
+                  <span v-if="h.error" class="text-ink-red-3 break-all">{{ h.error }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. The account, and its password -->
+            <div class="pt-2 border-t border-outline-gray-1 space-y-3">
+              <p class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">Account to Rotate</p>
+              <div class="grid grid-cols-2 gap-4">
+                <FormControl label="Username" v-model="form.username" placeholder="svc_app" class="col-span-2" />
+                <FormControl
+                  label="Password" v-model="form.password"
+                  :type="showSecrets ? 'text' : 'password'"
+                  :disabled="linuxCredentialLocked" class="col-span-2"
+                >
+                  <template #suffix>
+                    <Button variant="ghost" class="!p-1 h-auto text-ink-gray-5 hover:text-ink-gray-9" :icon="showSecrets ? 'lucide-eye-off' : 'lucide-eye'" @click="showSecrets = !showSecrets" />
+                  </template>
+                </FormControl>
+              </div>
+              <p v-if="linuxCredentialLocked" class="text-xs text-ink-gray-5 leading-relaxed">
+                <FeatherIcon name="lock" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                Confirm the hosts above first &mdash; that way the password you store is one Vault has
+                proven it can actually set on every machine.
+              </p>
+            </div>
+
+            <!-- 5. Schedule -->
+            <div class="pt-2 border-t border-outline-gray-1 space-y-2">
+              <FormControl type="checkbox" label="Rotate this password automatically" v-model="form.enable_rotation" />
+              <p class="text-xs text-ink-gray-5 leading-relaxed">
+                Each rotation sets a new password on every host listed above. If any host cannot be
+                updated the whole rotation is abandoned and the ones already changed are put back, so
+                Vault and your servers never disagree.
+              </p>
+              <div v-if="form.enable_rotation" class="grid grid-cols-2 gap-4 pt-1">
+                <FormControl label="Rotate Every" type="number" min="1" v-model="form.rotation_interval" />
+                <FormControl label="Interval Unit" type="select" v-model="form.rotation_unit" :options="ROTATION_UNITS" />
+              </div>
+            </div>
+          </div>
+        </template>
+
         <!-- Guided Database flow: server -> admin -> test -> stored credential.
              Every other secret type keeps the plain generic field grid below. -->
         <template v-if="form.secret_type === 'Database'">
@@ -115,7 +257,7 @@
           </div>
         </template>
 
-        <div v-else class="grid grid-cols-2 gap-4">
+        <div v-else-if="form.secret_type !== 'Linux Server'" class="grid grid-cols-2 gap-4">
           <template v-for="field in visibleFieldsFor(form.secret_type, form)" :key="field.name">
             <!-- Media Attachment Custom UI -->
             <div v-if="field.type === 'file'" class="col-span-2 space-y-2 pt-1">
@@ -251,7 +393,7 @@ import { ref, computed, watch } from 'vue'
 import { Dialog, FormControl, Button, FeatherIcon, toast } from 'frappe-ui'
 import { SECRET_TYPES, ROTATION_UNITS, DATABASE_TYPES, DATABASE_DEFAULT_PORTS } from '../composables/constants'
 import { visibleFieldsFor } from '../composables/secretFields'
-import { useFolders, useCreateSecret, useTestDbConnectionParams } from '../composables/vault'
+import { useFolders, useCreateSecret, useTestDbConnectionParams, useTestLinuxConnectionParams } from '../composables/vault'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
 import { validateTotpSecret } from '../utils/secretForm'
 
@@ -286,6 +428,9 @@ const defaultForm = () => ({
   db_auth_source: '', db_use_ssl: 0, db_password: '',
   enable_rotation: 0, rotation_interval: 90, rotation_unit: 'Days', zip_passphrase: '',
   apply_rotation_to_target: 0, rotation_admin_username: '', rotation_admin_password: '',
+  linux_hosts: [], ansible_user: '',
+  ansible_ssh_private_key: '', ansible_become_password: '',
+  ansible_use_become: 1, strict_host_key_checking: 1, ssh_port: 22,
 })
 
 const form = ref(defaultForm())
@@ -294,6 +439,63 @@ const showSecrets = ref(false)
 const uploadingFiles = ref(false)
 
 const testResource = useTestDbConnectionParams()
+const linuxTestResource = useTestLinuxConnectionParams()
+const hostResults = ref([])
+const showBulkHosts = ref(false)
+const bulkHosts = ref('')
+
+function addHost(hostname = '', ssh_port = '') {
+  form.value.linux_hosts.push({ hostname, ssh_port })
+}
+
+// Bulk entry: one host per line, `host:port` accepted. Existing hosts are kept
+// and duplicates dropped, so pasting a list twice is harmless.
+function applyBulkHosts() {
+  const existing = new Set(form.value.linux_hosts.map(h => (h.hostname || '').trim()).filter(Boolean))
+  for (const line of bulkHosts.value.split('\n')) {
+    const entry = line.trim()
+    if (!entry) continue
+    const [hostname, port] = entry.split(':')
+    const name = (hostname || '').trim()
+    if (!name || existing.has(name)) continue
+    existing.add(name)
+    addHost(name, (port || '').trim())
+  }
+  bulkHosts.value = ''
+  showBulkHosts.value = false
+}
+
+const linuxCredentialLocked = computed(
+  () => form.value.secret_type === 'Linux Server' && testState.value !== 'passed'
+)
+
+async function handleTestLinux() {
+  testState.value = 'untested'
+  testMessage.value = ''
+  hostResults.value = []
+  try {
+    const result = await linuxTestResource.submit({
+      username: form.value.username,
+      hosts: JSON.stringify(
+        form.value.linux_hosts
+          .filter(h => (h.hostname || '').trim())
+          .map(h => ({ hostname: h.hostname.trim(), ssh_port: Number(h.ssh_port) || 0 }))
+      ),
+      ansible_user: form.value.ansible_user,
+      ansible_ssh_private_key: form.value.ansible_ssh_private_key,
+      ansible_become_password: form.value.ansible_become_password,
+      ansible_use_become: form.value.ansible_use_become ? 1 : 0,
+      strict_host_key_checking: form.value.strict_host_key_checking ? 1 : 0,
+      ssh_port: Number(form.value.ssh_port) || 22,
+    })
+    hostResults.value = result.hosts || []
+    testState.value = result.success ? 'passed' : 'failed'
+    testMessage.value = result.message || ''
+  } catch (err) {
+    testState.value = 'failed'
+    testMessage.value = err.messages?.[0] || err.message || 'Could not reach these hosts'
+  }
+}
 const testState = ref('untested')   // 'untested' | 'passed' | 'failed'
 const testMessage = ref('')
 
@@ -312,10 +514,16 @@ watch(
     form.value.database_type, form.value.db_host, form.value.db_port, form.value.db_name,
     form.value.db_auth_source, form.value.db_use_ssl, form.value.username,
     form.value.rotation_admin_username, form.value.rotation_admin_password,
+    form.value.ansible_user,
+    form.value.ansible_ssh_private_key,
+    form.value.ansible_become_password, form.value.ansible_use_become,
+    form.value.strict_host_key_checking,
+    JSON.stringify(form.value.linux_hosts),
   ],
   () => {
     testState.value = 'untested'
     testMessage.value = ''
+    hostResults.value = []
   }
 )
 
@@ -425,6 +633,11 @@ async function handleCreate() {
     return
   }
 
+  if (linuxCredentialLocked.value) {
+    toast.error('Confirm the hosts are reachable before saving this secret')
+    return
+  }
+
   if (['Password', 'API Key'].includes(form.value.secret_type) && form.value.totp_secret) {
     const validation = validateTotpSecret(form.value.totp_secret)
     if (!validation.ok) {
@@ -434,10 +647,34 @@ async function handleCreate() {
   }
 
   const payload = { ...form.value }
+  if (payload.secret_type !== 'Linux Server') delete payload.linux_hosts
 
-  // For a Database secret, letting Vault reset the password on the server is
-  // what turns rotation on — the two are one decision in this dialog.
-  if (payload.secret_type === 'Database') {
+  if (payload.secret_type === 'Linux Server') {
+    payload.linux_hosts = payload.linux_hosts
+      .filter(h => (h.hostname || '').trim())
+      .map(h => ({ hostname: h.hostname.trim(), ssh_port: Number(h.ssh_port) || 0 }))
+    payload.ssh_port = Number(payload.ssh_port) || 22
+    payload.ansible_use_become = payload.ansible_use_become ? 1 : 0
+    payload.strict_host_key_checking = payload.strict_host_key_checking ? 1 : 0
+
+    if (!payload.ansible_use_become) delete payload.ansible_become_password
+
+    // Rotating always reaches the hosts — the server enforces this too.
+    if (payload.enable_rotation) {
+      payload.enable_rotation = 1
+      payload.apply_rotation_to_target = 1
+      payload.rotation_interval = Number(payload.rotation_interval) || 90
+      payload.rotation_unit = payload.rotation_unit || 'Days'
+    } else {
+      payload.enable_rotation = 0
+      payload.apply_rotation_to_target = 0
+      delete payload.rotation_interval
+      delete payload.rotation_unit
+    }
+    delete payload.zip_passphrase
+    delete payload.rotation_admin_username
+    delete payload.rotation_admin_password
+  } else if (payload.secret_type === 'Database') {
     if (payload.apply_rotation_to_target) {
       payload.apply_rotation_to_target = 1
       payload.enable_rotation = 1

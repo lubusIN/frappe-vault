@@ -290,6 +290,65 @@ def test_db_connection(name: str) -> dict:
 
 
 @frappe.whitelist()
+@rate_limit(limit=30, seconds=60 * 60)
+def test_linux_connection_params(
+    username: str,
+    hosts,
+    ansible_user: str,
+    ansible_ssh_private_key: str,
+    ansible_become_password: str | None = None,
+    ansible_use_become=1,
+    strict_host_key_checking=1,
+    ssh_port=22,
+) -> dict:
+    """Reach a set of Linux hosts from form values, before any secret exists.
+
+    Backs the Test Connection step in the create dialog. Proves each host answers
+    and that privilege escalation works, so an unreachable machine or a sudo
+    problem surfaces now rather than part-way through a rotation.
+
+    Nothing is changed on any host and nothing is stored here — the credentials
+    live only for the duration of this call. Rate limited and restricted to users
+    who could create the secret anyway, because it makes this server open
+    outbound SSH connections to hosts the caller chooses.
+    """
+    if not frappe.has_permission("Vault Secret", "create"):
+        frappe.throw(_("You don't have permission to create secrets"), frappe.PermissionError)
+
+    if isinstance(hosts, str):
+        try:
+            hosts = frappe.parse_json(hosts)
+        except Exception:
+            frappe.throw(_("Invalid host list"), frappe.ValidationError)
+    if not isinstance(hosts, builtins.list):
+        frappe.throw(_("Invalid host list"), frappe.ValidationError)
+
+    from frappe_vault.services import linux_rotation_service as linux
+
+    target = linux.make_linux_target(
+        username=username,
+        hosts=hosts,
+        ansible_user=ansible_user,
+        ssh_private_key=ansible_ssh_private_key,
+        become_password=ansible_become_password,
+        use_become=frappe.utils.cint(ansible_use_become),
+        strict_host_key_checking=frappe.utils.cint(strict_host_key_checking),
+        ssh_port=ssh_port,
+    )
+
+    result = linux.ping(target)
+
+    return {
+        "success": result.all_ok,
+        "target": target.describe(),
+        "hosts": [{"hostname": o.hostname, "ok": o.ok, "error": o.error} for o in result.outcomes],
+        "message": _("Reached all {0} host(s), and sudo works.").format(len(result.outcomes))
+        if result.all_ok
+        else result.summary(),
+    }
+
+
+@frappe.whitelist()
 def test_linux_connection(name: str) -> dict:
     """Reach every host of a Linux Server secret without changing anything.
 

@@ -318,8 +318,6 @@ class VaultSecret(Document):
         if not self.username:
             frappe.throw(_("Username is required — it names the Linux account whose password is changed."))
 
-        from frappe_vault.services.linux_rotation_service import AUTH_METHODS
-
         if not (self.ansible_user or "").strip():
             frappe.throw(_("An Ansible User is required to reach these hosts."))
 
@@ -331,14 +329,16 @@ class VaultSecret(Document):
                 ).format(self.username)
             )
 
-        if self.ansible_auth_method not in AUTH_METHODS:
-            frappe.throw(_("Choose how Vault authenticates: {0}.").format(" or ".join(AUTH_METHODS)))
-
-        if self.ansible_auth_method == "SSH Key" and not self.ansible_ssh_private_key:
-            frappe.throw(_("An SSH Private Key is required for key-based access."))
-
-        if self.ansible_auth_method == "Password" and not self.ansible_password:
-            frappe.throw(_("An SSH Password is required for password-based access."))
+        # SSH key only, deliberately: no password path for the automation account,
+        # so there is no SSH credential for it sitting in the vault to brute-force
+        # or reuse.
+        if not self.ansible_ssh_private_key:
+            frappe.throw(
+                _(
+                    "An SSH Private Key is required. Vault only connects to Linux hosts by key, never a "
+                    "password."
+                )
+            )
 
     def validate_target_apply_config(self):
         """Reject an 'apply to the live database' setup the rotation job could not carry out.

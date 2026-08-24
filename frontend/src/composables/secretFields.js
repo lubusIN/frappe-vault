@@ -46,6 +46,11 @@ export const secretFieldsConfig = {
     },
     { name: 'db_use_ssl', label: 'Use TLS / SSL', type: 'checkbox', colSpan: 1 }
   ],
+  'Linux Server': [
+    { name: 'username', label: 'Account', type: 'text', mono: true, placeholder: 'the Unix account to rotate', colSpan: 1 },
+    { name: 'ansible_user', label: 'Ansible User', type: 'text', mono: true, colSpan: 1 },
+    { name: 'password', label: 'Password', type: 'password', mono: true, colSpan: 2 }
+  ],
   'SSH Key': [
     { name: 'url', label: 'URL / Server IP', type: 'url', isLink: true, colSpan: 2 },
     { name: 'username', label: 'Username', type: 'text', mono: true, placeholder: 'root / ubuntu', colSpan: 2 },

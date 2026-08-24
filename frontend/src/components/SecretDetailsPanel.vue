@@ -121,14 +121,57 @@
           </template>
         </div>
 
+        <!-- Linux inventory and automation access -->
+        <div v-if="editForm.secret_type === 'Linux Server'" class="pt-3 border-t border-outline-gray-1 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">
+              Servers ({{ editForm.linux_hosts.length }})
+            </p>
+            <Button variant="subtle" size="sm" icon-left="plus" label="Add host"
+                    @click="editForm.linux_hosts.push({ hostname: '', ssh_port: '' })" />
+          </div>
+
+          <div v-for="(host, hIdx) in editForm.linux_hosts" :key="hIdx" class="flex items-center gap-2">
+            <FormControl class="flex-1 text-sm" v-model="host.hostname" placeholder="hostname or IP" />
+            <FormControl class="w-20 text-sm" v-model="host.ssh_port" placeholder="22" />
+            <Button variant="ghost" icon="lucide-x" class="!p-1 h-auto text-ink-gray-4 hover:!text-ink-red-3"
+                    @click="editForm.linux_hosts.splice(hIdx, 1)" />
+          </div>
+
+          <FormControl label="Ansible User" v-model="editForm.ansible_user" class="w-full text-sm" />
+
+          <FormControl
+            type="textarea" :rows="4" label="SSH Private Key"
+            v-model="editForm.ansible_ssh_private_key"
+            :placeholder="secretData.has_ansible_ssh_private_key ? 'Leave blank to keep the stored key' : ''"
+            class="w-full text-xs font-mono"
+          />
+
+          <div class="grid grid-cols-2 gap-4">
+            <FormControl type="checkbox" label="Use sudo (become)" v-model="editForm.ansible_use_become" />
+            <FormControl type="checkbox" label="Strict host key checking" v-model="editForm.strict_host_key_checking" />
+          </div>
+          <FormControl
+            v-if="editForm.ansible_use_become"
+            label="sudo Password" v-model="editForm.ansible_become_password"
+            :type="editRevealedFields.ansible_become_password ? 'text' : 'password'"
+            :placeholder="secretData.has_ansible_become_password ? 'Leave blank to keep it' : 'Blank for passwordless sudo'"
+            class="w-full text-sm"
+          />
+          <p class="text-xs text-ink-gray-5 leading-relaxed">
+            Every rotation sets the new password on all hosts above. If any host cannot be updated the
+            rotation is abandoned and the ones already changed are put back.
+          </p>
+        </div>
+
         <!-- Automatic rotation (Password and Database secrets) -->
         <div v-if="ROTATABLE_SECRET_TYPES.includes(editForm.secret_type)" class="pt-3 border-t border-outline-gray-1 space-y-2">
           <FormControl type="checkbox" label="Enable Automatic Rotation" v-model="editForm.enable_rotation" />
           <p class="text-xs text-ink-gray-5 leading-relaxed">
             Generate a new password on a schedule. Everyone with access is notified and can read the new
             value here.
-            <template v-if="editForm.secret_type === 'Database'">
-              Updates the stored value only, unless you also turn on applying it to the database below.
+            <template v-if="SYNCED_SECRET_TYPES.includes(editForm.secret_type)">
+              Each rotation is also applied to the systems above, so Vault and they never disagree.
             </template>
             <template v-else>
               Updates the stored value only &mdash; you must apply it to the target system yourself.
@@ -260,6 +303,37 @@
           </span>
         </div>
 
+        <!-- Linux inventory, with the last result per machine -->
+        <div v-if="secretData.secret_type === 'Linux Server'" class="pt-2 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">
+              Servers ({{ (secretData.linux_hosts || []).length }})
+            </span>
+            <Button
+              v-if="canEdit"
+              variant="ghost" size="sm" icon-left="lucide-plug" label="Test"
+              :loading="linuxTestResource.loading" @click="handleTestLinux"
+            />
+          </div>
+
+          <div v-for="host in secretData.linux_hosts || []" :key="host.hostname"
+               class="flex items-center justify-between gap-2 py-1 text-sm">
+            <span class="font-mono text-ink-gray-8 truncate">
+              {{ host.hostname }}<span v-if="host.ssh_port && host.ssh_port !== 22" class="text-ink-gray-5">:{{ host.ssh_port }}</span>
+            </span>
+            <span v-if="host.last_status" class="shrink-0 text-xs font-medium"
+                  :class="host.last_status === 'Success' ? 'text-ink-green-3' : 'text-ink-red-3'">
+              {{ host.last_status }}
+            </span>
+            <span v-else class="shrink-0 text-xs text-ink-gray-4">not yet rotated</span>
+          </div>
+
+          <p v-for="host in failedHosts" :key="'e-' + host.hostname"
+             class="text-xs text-ink-red-3 bg-surface-red-1 border border-outline-red-1 rounded-lg p-2 break-words">
+            <span class="font-mono">{{ host.hostname }}</span>: {{ host.last_error }}
+          </p>
+        </div>
+
         <!-- Applies straight to the live server -->
         <div v-if="secretData.apply_rotation_to_target" class="flex items-center justify-between py-1 text-sm">
           <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Applies To</span>
@@ -301,6 +375,7 @@
           />
           <Button v-if="secretData.enable_rotation" variant="outline" size="sm" icon="lucide-refresh-cw" label="Rotate Now" @click="$emit('open-rotate')" />
         </div>
+
 
         <!-- Dynamic Fields Array -->
         <template v-for="field in visibleFieldsFor(secretData.secret_type, secretData)" :key="field.name">
@@ -469,8 +544,9 @@ import {
   useFolders,
   useClearZipPassphrase,
   useTestDbConnection,
+  useTestLinuxConnection,
 } from '../composables/vault'
-import { secretTypeOptions, ROTATION_UNITS, ROTATABLE_SECRET_TYPES, DATABASE_DEFAULT_PORTS, formatRelativeTime } from '../composables/constants'
+import { secretTypeOptions, ROTATION_UNITS, ROTATABLE_SECRET_TYPES, SYNCED_SECRET_TYPES, DATABASE_DEFAULT_PORTS, formatRelativeTime } from '../composables/constants'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
 import { validateTotpSecret } from '../utils/secretForm'
 
@@ -493,6 +569,23 @@ const decryptResource = useDecryptSecret()
 const updateResource = useUpdateSecret()
 const clearPassphraseResource = useClearZipPassphrase()
 const testConnectionResource = useTestDbConnection()
+const linuxTestResource = useTestLinuxConnection()
+
+// Only hosts whose last run actually failed carry an error worth showing.
+const failedHosts = computed(
+  () => (props.secretData?.linux_hosts || []).filter(h => h.last_status === 'Failed' && h.last_error)
+)
+
+async function handleTestLinux() {
+  try {
+    const result = await linuxTestResource.submit({ name: props.name })
+    if (result.success) toast.success(result.message || 'All hosts reachable')
+    else toast.error(result.message || 'Some hosts could not be reached')
+    emit('saved')
+  } catch (err) {
+    toast.error(err.messages?.[0] || err.message || 'Could not reach these hosts')
+  }
+}
 const folders = useFolders()
 const clipboard = useClipboard()
 
@@ -554,6 +647,13 @@ const editForm = reactive({
   apply_rotation_to_target: 0,
   rotation_admin_username: '',
   rotation_admin_password: '',
+  linux_hosts: [],
+  ansible_user: '',
+  ansible_ssh_private_key: '',
+  ansible_become_password: '',
+  ansible_use_become: 1,
+  strict_host_key_checking: 1,
+  ssh_port: 22,
 })
 
 const decryptedData = computed(() => decryptResource.data?.decrypted)
@@ -680,6 +780,17 @@ async function toggleEditMode() {
     // means "keep whatever is stored", so both always start empty.
     editForm.zip_passphrase = ''
     editForm.rotation_admin_password = ''
+
+    editForm.linux_hosts = (sd.linux_hosts || []).map(h => ({
+      hostname: h.hostname || '', ssh_port: h.ssh_port || '',
+    }))
+    editForm.ansible_user = sd.ansible_user || ''
+    editForm.ansible_use_become = sd.ansible_use_become ? 1 : 0
+    editForm.strict_host_key_checking = sd.strict_host_key_checking ? 1 : 0
+    editForm.ssh_port = sd.ssh_port || 22
+    // Never returned by the server; blank means "keep what is stored".
+    editForm.ansible_ssh_private_key = ''
+    editForm.ansible_become_password = ''
 
     editAttachmentList.value = parseAttachments(sd.attachment)
     syncEditAttachmentForm()
@@ -836,6 +947,19 @@ async function handleSave() {
       if (applies && editForm.rotation_admin_password) {
         payload.rotation_admin_password = editForm.rotation_admin_password
       }
+    } else if (editForm.secret_type === 'Linux Server') {
+      payload.username = editForm.username
+      payload.password = editForm.password
+      payload.linux_hosts = editForm.linux_hosts
+        .filter(h => (h.hostname || '').trim())
+        .map(h => ({ hostname: h.hostname.trim(), ssh_port: Number(h.ssh_port) || 0 }))
+      payload.ansible_user = editForm.ansible_user
+      payload.ansible_use_become = editForm.ansible_use_become ? 1 : 0
+      payload.strict_host_key_checking = editForm.strict_host_key_checking ? 1 : 0
+      payload.ssh_port = Number(editForm.ssh_port) || 22
+      // Each of these is only sent when freshly typed — blank keeps the stored one.
+      if (editForm.ansible_ssh_private_key) payload.ansible_ssh_private_key = editForm.ansible_ssh_private_key
+      if (editForm.ansible_become_password) payload.ansible_become_password = editForm.ansible_become_password
     } else if (editForm.secret_type === 'SSH Key') {
       payload.username = editForm.username
       payload.ssh_private_key = editForm.ssh_private_key

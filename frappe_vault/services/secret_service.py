@@ -297,6 +297,26 @@ def get_secret(name: str, decrypt: bool = False) -> dict:
         result["db_name"] = doc.db_name
         result["db_auth_source"] = doc.db_auth_source
         result["db_use_ssl"] = doc.db_use_ssl
+    elif doc.secret_type == "Linux Server":
+        result["ansible_user"] = doc.ansible_user
+        result["ansible_use_become"] = doc.ansible_use_become
+        result["strict_host_key_checking"] = doc.strict_host_key_checking
+        result["ssh_port"] = doc.ssh_port
+        # Status flags only — the key and the sudo password are never sent to
+        # the client, same as every other stored credential here.
+        result["has_ansible_ssh_private_key"] = bool(doc.get("ansible_ssh_private_key"))
+        result["has_ansible_become_password"] = bool(doc.get("ansible_become_password"))
+        result["linux_hosts"] = [
+            {
+                "hostname": row.hostname,
+                "ssh_port": row.ssh_port,
+                "label": row.label,
+                "last_status": row.last_status,
+                "last_error": row.last_error,
+                "last_applied_on": str(row.last_applied_on) if row.last_applied_on else None,
+            }
+            for row in (doc.get("linux_hosts") or [])
+        ]
     elif doc.secret_type == "SSH Key":
         result["ssh_private_key"] = doc.ssh_private_key
 
@@ -547,15 +567,28 @@ def update_secret(name: str, data: dict) -> dict:
         "apply_rotation_to_target",
         "rotation_admin_username",
         "rotation_admin_password",
+        "linux_hosts",
+        "ansible_user",
+        "ansible_ssh_private_key",
+        "ansible_become_password",
+        "ansible_use_become",
+        "strict_host_key_checking",
+        "ssh_port",
     ]
+
+    # Credentials the client never receives back, so a blank means "keep what is
+    # stored" rather than "clear it". Switching auth method or turning off sudo
+    # is what removes one.
+    keep_if_blank = (
+        "rotation_admin_password",
+        "ansible_ssh_private_key",
+        "ansible_become_password",
+    )
 
     for field, value in data.items():
         if field not in allowed_fields:
             continue
-        # A blank rotation admin password means "leave the stored one alone" —
-        # the client never receives it back, so it has nothing to send in.
-        # Clearing `rotation_admin_username` is what removes the pair.
-        if field == "rotation_admin_password" and not value:
+        if field in keep_if_blank and not value:
             continue
         doc.set(field, value)
 

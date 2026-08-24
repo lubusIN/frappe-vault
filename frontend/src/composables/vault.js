@@ -69,6 +69,19 @@ export function useTestDbConnectionParams() {
   })
 }
 
+// Reaches Linux hosts from unsaved form values, before any secret exists.
+export function useTestLinuxConnectionParams() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_linux_connection_params',
+  })
+}
+
+export function useTestLinuxConnection() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_linux_connection',
+  })
+}
+
 export function useTestDbConnection() {
   return createResource({
     url: 'frappe_vault.api.secrets.test_db_connection',

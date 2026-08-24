@@ -12,8 +12,9 @@ reports per host.
 Who runs the change
 -------------------
 Never the account being rotated. Ansible connects as a separate automation user
-over SSH — by key, or by password when that is all a host offers — and escalates
-with `become`. Two things follow from that, and both matter:
+over SSH key only — never a password, so no SSH credential for this account sits
+in the vault waiting to be brute-forced or reused — and escalates with `become`.
+Two things follow from that, and both matter:
 
   * changing the password cannot cut off the connection doing the changing, and
   * a rollback still works afterwards, because the credential that reaches the
@@ -61,10 +62,6 @@ SSH_TIMEOUT_SECONDS = 15
 # How many hosts Ansible addresses at once.
 DEFAULT_FORKS = 10
 
-KEY_AUTH = "SSH Key"
-PASSWORD_AUTH = "Password"
-AUTH_METHODS = (KEY_AUTH, PASSWORD_AUTH)
-
 
 class LinuxApplyError(frappe.ValidationError):
     """The password could not be changed on one or more Linux hosts."""
@@ -77,9 +74,7 @@ class LinuxTarget:
     username: str
     hosts: tuple
     ansible_user: str
-    auth_method: str
-    ssh_private_key: str | None = None
-    ansible_password: str | None = None
+    ssh_private_key: str
     become_password: str | None = None
     use_become: bool = True
     strict_host_key_checking: bool = True
@@ -137,9 +132,7 @@ def make_linux_target(
     username: str,
     hosts,
     ansible_user: str,
-    auth_method: str,
-    ssh_private_key: str | None = None,
-    ansible_password: str | None = None,
+    ssh_private_key: str,
     become_password: str | None = None,
     use_become: bool = True,
     strict_host_key_checking: bool = True,
@@ -174,17 +167,11 @@ def make_linux_target(
             LinuxApplyError,
         )
 
-    if auth_method not in AUTH_METHODS:
+    if not ssh_private_key:
         frappe.throw(
-            _("Choose how Vault connects to these hosts: {0}.").format(" or ".join(AUTH_METHODS)),
+            _("An SSH private key is required. Vault only connects to Linux hosts by key, never a password."),
             LinuxApplyError,
         )
-
-    if auth_method == KEY_AUTH and not ssh_private_key:
-        frappe.throw(_("An SSH private key is required for key-based access."), LinuxApplyError)
-
-    if auth_method == PASSWORD_AUTH and not ansible_password:
-        frappe.throw(_("A password is required for password-based SSH access."), LinuxApplyError)
 
     normalised = _normalise_hosts(hosts, default_port=frappe.utils.cint(ssh_port) or 22)
     if not normalised:
@@ -194,9 +181,7 @@ def make_linux_target(
         username=username,
         hosts=tuple(normalised),
         ansible_user=ansible_user,
-        auth_method=auth_method,
-        ssh_private_key=ssh_private_key or None,
-        ansible_password=ansible_password or None,
+        ssh_private_key=ssh_private_key,
         become_password=become_password or None,
         use_become=bool(use_become),
         strict_host_key_checking=bool(strict_host_key_checking),
@@ -215,9 +200,7 @@ def build_linux_target(doc) -> LinuxTarget:
         username=doc.username,
         hosts=[{"hostname": r.hostname, "ssh_port": r.ssh_port} for r in (doc.get("linux_hosts") or [])],
         ansible_user=doc.ansible_user,
-        auth_method=doc.ansible_auth_method,
         ssh_private_key=doc.get_password("ansible_ssh_private_key", raise_exception=False),
-        ansible_password=doc.get_password("ansible_password", raise_exception=False),
         become_password=doc.get_password("ansible_become_password", raise_exception=False),
         use_become=doc.ansible_use_become,
         strict_host_key_checking=doc.strict_host_key_checking,
@@ -413,10 +396,7 @@ def _build_inventory(target: LinuxTarget, workdir: str) -> str:
         f"ansible_ssh_common_args=-o ConnectTimeout={SSH_TIMEOUT_SECONDS}",
     ]
 
-    if target.auth_method == KEY_AUTH:
-        lines.append(f"ansible_ssh_private_key_file={os.path.join(workdir, 'id_key')}")
-    else:
-        lines.append(f"ansible_password={target.ansible_password}")
+    lines.append(f"ansible_ssh_private_key_file={os.path.join(workdir, 'id_key')}")
 
     if target.use_become:
         lines.append("ansible_become=true")
@@ -424,8 +404,7 @@ def _build_inventory(target: LinuxTarget, workdir: str) -> str:
         if target.become_password:
             lines.append(f"ansible_become_password={target.become_password}")
 
-    if target.auth_method == KEY_AUTH:
-        _write_key(workdir, target.ssh_private_key)
+    _write_key(workdir, target.ssh_private_key)
 
     return "\n".join(lines) + "\n"
 
