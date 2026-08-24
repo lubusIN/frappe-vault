@@ -166,13 +166,19 @@ Read-only audit log tracking all secret access.
 - Access logging for audit compliance
 - Secrets are only accessible by owners or explicitly shared users/roles
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+Please do not report security vulnerabilities publicly. [Contact](https://lubus.in/contact-us) us privately instead.
 
 ## Support
 
-For issues and feature requests, please use the GitHub issue tracker.
+Frappe Vault is a free and open-source project maintained by [LUBUS](https://lubus.in/).
+
+For bugs, feature requests, and community support, please use GitHub [Issues](https://github.com/lubusIN/frappe-vault/issues). Our team reviews and addresses issues based on availability and project priorities, so we cannot guarantee response or resolution timelines for community support.
+
+If your organization needs dedicated assistance, implementation help, customization, or priority support, get in touch with [LUBUS](https://lubus.in/contact-us).
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or Pull Request.
 
 ## More Frappe Tools
 
