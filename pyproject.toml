@@ -13,6 +13,9 @@ dependencies = [
     # stdlib zipfile can only *read* encrypted zips, never write them.
     "pyzipper>=0.4.0",
     "pyotp",
+    # Applying a rotated Database password to the live target server.
+    # psycopg2 and pymysql already ship with Frappe/bench; pymongo does not.
+    "pymongo>=4.0",
 ]
 
 [build-system]

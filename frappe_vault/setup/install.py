@@ -1,5 +1,7 @@
 """Post-install setup for Frappe Vault."""
 
+import os
+
 import frappe
 
 
@@ -15,7 +17,7 @@ def after_install():
     grant_roles_to_admin()
     create_default_settings()
     create_default_folders()
-    create_desktop_icon()
+    sync_navigation_fixtures()
 
     frappe.db.commit()  # nosemgrep
 
@@ -26,6 +28,7 @@ def after_migrate():
     create_roles()
     grant_roles_to_admin()
     create_default_settings()
+    sync_navigation_fixtures()
 
 
 def ensure_module():
@@ -110,16 +113,28 @@ def create_default_folders():
                 frappe.get_doc({"doctype": "Vault Folder", **folder}).insert(ignore_permissions=True)
 
 
-def create_desktop_icon():
-    """Create Desk desktop icon for the Vault app."""
-    try:
-        from frappe.desk.doctype.desktop_icon.desktop_icon import (
-            create_desktop_icons_from_installed_apps,
-        )
+def sync_navigation_fixtures():
+    """(Re)create the Desk desktop icon and sidebar for Vault from their fixture files.
 
-        create_desktop_icons_from_installed_apps()
-    except Exception:
-        frappe.log_error(
-            frappe.get_traceback(),
-            "Frappe Vault Desktop Icon Creation Failed",
-        )
+    `DocType` and `Workspace` are synced from an app's module folder automatically
+    on every `bench migrate`. `Desktop Icon` and `Workspace Sidebar` are not —
+    Frappe's orphan-cleanup pass only checks that a matching fixture file exists
+    to decide whether to leave a `standard` record alone; nothing keeps the
+    record's *content* in step with the file, and nothing recreates the record if
+    it is ever deleted (by the cleanup pass itself, or by hand). Importing both
+    fixtures directly, on every install and every migrate, closes both gaps —
+    the vault's entry in the Desk app grid and its Desk sidebar are as durable as
+    everything else this app ships.
+    """
+    from frappe.modules.import_file import import_file_by_path
+
+    app_path = frappe.get_app_path("frappe_vault")
+    for relative_path in ("desktop_icon/vault.json", "workspace_sidebar/vault.json"):
+        path = os.path.join(app_path, relative_path)
+        try:
+            import_file_by_path(path, force=True, ignore_version=True)
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"Frappe Vault Navigation Fixture Import Failed ({relative_path})",
+            )

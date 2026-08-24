@@ -909,8 +909,16 @@ def create_one_time_link(
     passphrase: str = None,
 ) -> dict:
     """Create a one-time shareable link for a secret."""
-    if not frappe.has_permission("Vault Secret", "read", secret_name):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    from frappe_vault.utils.permissions import can_reveal_secret_value
+
+    # The link hands out plaintext, so creating one requires the right to see
+    # that plaintext. Checking only `read` would let anyone with the admin
+    # bypass mint themselves a link and read a secret they cannot open directly.
+    if not can_reveal_secret_value(secret_name):
+        frappe.throw(
+            _("Only this secret's owner and the people it is shared with can create a link to it."),
+            frappe.PermissionError,
+        )
     if not frappe.has_permission("Vault One Time Link", "create"):
         frappe.throw(_("You don't have permission to create links"), frappe.PermissionError)
 

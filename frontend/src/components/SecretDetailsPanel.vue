@@ -35,7 +35,7 @@
 
         <!-- Dynamic type inputs -->
         <div class="space-y-3">
-          <template v-for="field in secretFieldsConfig[editForm.secret_type] || []" :key="field.name">
+          <template v-for="field in visibleFieldsFor(editForm.secret_type, editForm)" :key="field.name">
             <!-- Textarea -->
             <div v-if="field.type === 'textarea'" class="pt-1">
               <FormControl type="textarea" :label="field.label" v-model="editForm[field.name]" :rows="5" :placeholder="field.placeholder" class="w-full text-xs" :class="field.mono ? 'font-mono' : ''" />
@@ -94,6 +94,22 @@
               </div>
             </div>
 
+            <!-- Engine / option picker -->
+            <div v-else-if="field.type === 'select'" class="flex items-center justify-between gap-3 text-sm">
+              <label class="w-28 shrink-0 text-ink-gray-5 font-normal">{{ field.label }}</label>
+              <div class="flex-1 min-w-0">
+                <FormControl type="select" v-model="editForm[field.name]" :options="field.options" class="w-full text-sm cursor-pointer" />
+              </div>
+            </div>
+
+            <!-- Toggle -->
+            <div v-else-if="field.type === 'checkbox'" class="flex items-center justify-between gap-3 text-sm">
+              <label class="w-28 shrink-0 text-ink-gray-5 font-normal">{{ field.label }}</label>
+              <div class="flex-1 min-w-0 flex justify-end">
+                <FormControl type="checkbox" v-model="editForm[field.name]" />
+              </div>
+            </div>
+
             <!-- Text / Password / URL -->
             <div v-else class="flex items-center justify-between gap-3 text-sm">
               <label class="w-28 shrink-0 text-ink-gray-5 font-normal">{{ field.label }}</label>
@@ -105,12 +121,61 @@
           </template>
         </div>
 
-        <!-- Automatic rotation (Password secrets only) -->
-        <div v-if="editForm.secret_type === 'Password'" class="pt-3 border-t border-outline-gray-1 space-y-2">
+        <!-- Linux inventory and automation access -->
+        <div v-if="editForm.secret_type === 'Linux Server'" class="pt-3 border-t border-outline-gray-1 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">
+              Servers ({{ editForm.linux_hosts.length }})
+            </p>
+            <Button variant="subtle" size="sm" icon-left="plus" label="Add host"
+                    @click="editForm.linux_hosts.push({ hostname: '', ssh_port: '' })" />
+          </div>
+
+          <div v-for="(host, hIdx) in editForm.linux_hosts" :key="hIdx" class="flex items-center gap-2">
+            <FormControl class="flex-1 text-sm" v-model="host.hostname" placeholder="hostname or IP" />
+            <FormControl class="w-20 text-sm" v-model="host.ssh_port" placeholder="22" />
+            <Button variant="ghost" icon="lucide-x" class="!p-1 h-auto text-ink-gray-4 hover:!text-ink-red-3"
+                    @click="editForm.linux_hosts.splice(hIdx, 1)" />
+          </div>
+
+          <FormControl label="Ansible User" v-model="editForm.ansible_user" class="w-full text-sm" />
+
+          <FormControl
+            type="textarea" :rows="4" label="SSH Private Key"
+            v-model="editForm.ansible_ssh_private_key"
+            :placeholder="secretData.has_ansible_ssh_private_key ? 'Leave blank to keep the stored key' : ''"
+            class="w-full text-xs font-mono"
+          />
+
+          <div class="grid grid-cols-2 gap-4">
+            <FormControl type="checkbox" label="Use sudo (become)" v-model="editForm.ansible_use_become" />
+            <FormControl type="checkbox" label="Strict host key checking" v-model="editForm.strict_host_key_checking" />
+          </div>
+          <FormControl
+            v-if="editForm.ansible_use_become"
+            label="sudo Password" v-model="editForm.ansible_become_password"
+            :type="editRevealedFields.ansible_become_password ? 'text' : 'password'"
+            :placeholder="secretData.has_ansible_become_password ? 'Leave blank to keep it' : 'Blank for passwordless sudo'"
+            class="w-full text-sm"
+          />
+          <p class="text-xs text-ink-gray-5 leading-relaxed">
+            Every rotation sets the new password on all hosts above. If any host cannot be updated the
+            rotation is abandoned and the ones already changed are put back.
+          </p>
+        </div>
+
+        <!-- Automatic rotation (Password and Database secrets) -->
+        <div v-if="ROTATABLE_SECRET_TYPES.includes(editForm.secret_type)" class="pt-3 border-t border-outline-gray-1 space-y-2">
           <FormControl type="checkbox" label="Enable Automatic Rotation" v-model="editForm.enable_rotation" />
           <p class="text-xs text-ink-gray-5 leading-relaxed">
-            Generate a new password on a schedule and email it to everyone with access as an encrypted
-            archive. Updates the stored value only &mdash; you must apply it to the target system yourself.
+            Generate a new password on a schedule. Everyone with access is notified and can read the new
+            value here.
+            <template v-if="SYNCED_SECRET_TYPES.includes(editForm.secret_type)">
+              Each rotation is also applied to the systems above, so Vault and they never disagree.
+            </template>
+            <template v-else>
+              Updates the stored value only &mdash; you must apply it to the target system yourself.
+            </template>
           </p>
           <div v-if="editForm.enable_rotation" class="grid grid-cols-2 gap-4 pt-1">
             <FormControl label="Rotate Every" type="number" min="1" v-model="editForm.rotation_interval" class="w-full text-sm" />
@@ -143,6 +208,47 @@
               secret rotates, so its archive opens with your passphrase instead of the shared site one.
             </p>
           </template>
+
+          <!-- Push the rotated password to the live server -->
+          <template v-if="editForm.enable_rotation && editForm.secret_type === 'Database'">
+            <div class="pt-2 border-t border-outline-gray-1 space-y-2">
+              <FormControl
+                type="checkbox"
+                label="Apply New Password to the Database"
+                v-model="editForm.apply_rotation_to_target"
+              />
+              <p class="text-xs text-ink-gray-5 leading-relaxed">
+                Connect to <strong>{{ editForm.database_type || 'the database' }}</strong> on every rotation
+                and change the password there too, so Vault and the server stay in sync. If the server cannot
+                be updated the rotation is abandoned and the stored password is left untouched.
+              </p>
+
+              <template v-if="editForm.apply_rotation_to_target">
+                <FormControl
+                  label="Rotation Admin Username"
+                  v-model="editForm.rotation_admin_username"
+                  placeholder="postgres / root"
+                  class="w-full text-sm"
+                />
+                <FormControl
+                  label="Rotation Admin Password"
+                  v-model="editForm.rotation_admin_password"
+                  :type="editRevealedFields.rotation_admin_password ? 'text' : 'password'"
+                  :placeholder="secretData.has_rotation_admin_password ? 'Leave blank to keep current password' : ''"
+                  class="w-full text-sm"
+                >
+                  <template #suffix>
+                    <Button variant="ghost" :icon="editRevealedFields.rotation_admin_password ? 'lucide-eye-off' : 'lucide-eye'" class="!p-1 h-auto text-ink-gray-4 hover:text-ink-gray-9 focus:outline-none" @click="toggleField('rotation_admin_password', true)" />
+                  </template>
+                </FormControl>
+                <p class="text-xs text-ink-gray-5 leading-relaxed">
+                  The privileged account Vault authenticates as to reset the password. Required, because
+                  an account that cannot change its own password would only fail unattended. Stored
+                  encrypted, and never rotated by Vault. To remove it, untick applying to the database.
+                </p>
+              </template>
+            </div>
+          </template>
         </div>
 
         <!-- Notes input -->
@@ -159,6 +265,11 @@
 
       <!-- READ ONLY VIEW -->
       <div v-else class="space-y-2.5 py-1">
+        <p v-if="!canReveal" class="text-xs text-ink-gray-6 leading-relaxed bg-surface-gray-2 border border-outline-gray-1 rounded-lg p-2.5">
+          <FeatherIcon name="lock" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+          Only this secret's owner and the people it has been shared with can view its values.
+          Administering the vault does not grant access to what is stored in it.
+        </p>
         <!-- Secret Type -->
         <div class="flex items-center justify-between py-1 text-sm">
           <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Secret Type</span>
@@ -192,12 +303,82 @@
           </span>
         </div>
 
-        <div v-if="secretData.enable_rotation && canEdit" class="flex justify-end pt-1">
-          <Button variant="outline" size="sm" icon="lucide-refresh-cw" label="Rotate Now" @click="$emit('open-rotate')" />
+        <!-- Linux inventory, with the last result per machine -->
+        <div v-if="secretData.secret_type === 'Linux Server'" class="pt-2 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider">
+              Servers ({{ (secretData.linux_hosts || []).length }})
+            </span>
+            <Button
+              v-if="canEdit"
+              variant="ghost" size="sm" icon-left="lucide-plug" label="Test"
+              :loading="linuxTestResource.loading" @click="handleTestLinux"
+            />
+          </div>
+
+          <div v-for="host in secretData.linux_hosts || []" :key="host.hostname"
+               class="flex items-center justify-between gap-2 py-1 text-sm">
+            <span class="font-mono text-ink-gray-8 truncate">
+              {{ host.hostname }}<span v-if="host.ssh_port && host.ssh_port !== 22" class="text-ink-gray-5">:{{ host.ssh_port }}</span>
+            </span>
+            <span v-if="host.last_status" class="shrink-0 text-xs font-medium"
+                  :class="host.last_status === 'Success' ? 'text-ink-green-3' : 'text-ink-red-3'">
+              {{ host.last_status }}
+            </span>
+            <span v-else class="shrink-0 text-xs text-ink-gray-4">not yet rotated</span>
+          </div>
+
+          <p v-for="host in failedHosts" :key="'e-' + host.hostname"
+             class="text-xs text-ink-red-3 bg-surface-red-1 border border-outline-red-1 rounded-lg p-2 break-words">
+            <span class="font-mono">{{ host.hostname }}</span>: {{ host.last_error }}
+          </p>
         </div>
 
+        <!-- Applies straight to the live server -->
+        <div v-if="secretData.apply_rotation_to_target" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Applies To</span>
+          <span class="min-w-0 flex-1 text-right font-medium text-ink-gray-9 truncate">
+            <FeatherIcon name="database" class="w-3 h-3 inline -mt-0.5 mr-1" />
+            {{ secretData.database_type || 'Database' }} &middot; live server
+          </span>
+        </div>
+
+        <div v-if="secretData.apply_rotation_to_target && secretData.last_target_apply_status" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">Last Applied</span>
+          <span
+            class="min-w-0 flex-1 text-right font-medium truncate"
+            :class="secretData.last_target_apply_status === 'Success' ? 'text-ink-green-3' : 'text-ink-red-3'"
+          >
+            {{ secretData.last_target_apply_status }}
+            <span v-if="secretData.last_target_apply_on" class="text-ink-gray-5 font-normal">
+              &middot; {{ formatRelativeTime(secretData.last_target_apply_on) }}
+            </span>
+          </span>
+        </div>
+
+        <p
+          v-if="secretData.last_target_apply_status === 'Failed' && secretData.last_target_apply_error"
+          class="text-xs text-ink-red-3 bg-surface-red-1 border border-outline-red-1 rounded-lg p-2 whitespace-pre-line break-words"
+        >
+          {{ secretData.last_target_apply_error }}
+        </p>
+
+        <div v-if="canEdit && (secretData.enable_rotation || secretData.secret_type === 'Database')" class="flex justify-end gap-2 pt-1">
+          <Button
+            v-if="secretData.secret_type === 'Database'"
+            variant="outline"
+            size="sm"
+            icon="lucide-plug"
+            label="Test Connection"
+            :loading="testConnectionResource.loading"
+            @click="handleTestConnection"
+          />
+          <Button v-if="secretData.enable_rotation" variant="outline" size="sm" icon="lucide-refresh-cw" label="Rotate Now" @click="$emit('open-rotate')" />
+        </div>
+
+
         <!-- Dynamic Fields Array -->
-        <template v-for="field in secretFieldsConfig[secretData.secret_type] || []" :key="field.name">
+        <template v-for="field in visibleFieldsFor(secretData.secret_type, secretData)" :key="field.name">
           <!-- File Attachment View Mode -->
           <div v-if="field.type === 'file'" class="pt-3 space-y-3">
             <div class="flex items-center justify-between">
@@ -288,11 +469,17 @@
               <span class="font-mono tracking-wider font-medium text-ink-gray-9 truncate">
                 {{ revealedFields[field.name] ? decryptedData?.[field.name] : (field.name === 'card_number' ? '•••• •••• •••• ••••' : (field.name === 'card_cvv' ? '•••' : '••••••••••••')) }}
               </span>
-              <div class="flex items-center gap-0.5 shrink-0">
+              <div v-if="canReveal" class="flex items-center gap-0.5 shrink-0">
                 <Button v-if="field.name === 'totp_secret' && secretData.has_totp" variant="subtle" theme="blue" icon="lucide-clock" class="!p-1.5 h-auto text-ink-blue-5 hover:text-ink-blue-6 focus:outline-none" title="Get TOTP Code" @click="$emit('open-totp')" />
                 <Button variant="ghost" :icon="revealedFields[field.name] ? 'lucide-eye-off' : 'lucide-eye'" class="!p-1 h-auto text-ink-gray-4 hover:text-ink-gray-9 focus:outline-none" :title="'Reveal ' + field.label" @click="toggleField(field.name)" />
                 <Button v-if="canCopy" variant="ghost" :icon="copiedField === field.name ? 'lucide-check' : 'lucide-copy'" :class="copiedField === field.name ? 'text-ink-green-3 hover:text-ink-green-4' : 'text-ink-gray-4 hover:text-ink-gray-9'" class="!p-1 h-auto focus:outline-none" :title="'Copy ' + field.label" @click="copyFieldData(field.name)" />
               </div>
+              <FeatherIcon v-else name="lock" class="w-3.5 h-3.5 text-ink-gray-4 shrink-0" title="Not shared with you" />
+            </div>
+
+            <!-- Toggle -->
+            <div v-else-if="field.type === 'checkbox'" class="min-w-0 flex-1 flex items-center justify-end gap-1.5">
+              <span class="font-medium text-ink-gray-9">{{ secretData[field.name] ? 'Yes' : 'No' }}</span>
             </div>
 
             <!-- Standard Text Field -->
@@ -356,8 +543,10 @@ import {
   useUpdateSecret,
   useFolders,
   useClearZipPassphrase,
+  useTestDbConnection,
+  useTestLinuxConnection,
 } from '../composables/vault'
-import { secretTypeOptions, ROTATION_UNITS, formatRelativeTime } from '../composables/constants'
+import { secretTypeOptions, ROTATION_UNITS, ROTATABLE_SECRET_TYPES, SYNCED_SECRET_TYPES, DATABASE_DEFAULT_PORTS, formatRelativeTime } from '../composables/constants'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
 import { validateTotpSecret } from '../utils/secretForm'
 
@@ -366,6 +555,9 @@ const props = defineProps({
   secretData: { type: Object, default: () => ({}) },
   canEdit: { type: Boolean, default: false },
   canCopy: { type: Boolean, default: false },
+  // Whether this user may decrypt the stored values at all. Distinct from
+  // canCopy/canEdit: an administrator can manage a secret they may not read.
+  canReveal: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['open-totp', 'open-rotate', 'saved'])
@@ -376,6 +568,24 @@ const isEditing = ref(false)
 const decryptResource = useDecryptSecret()
 const updateResource = useUpdateSecret()
 const clearPassphraseResource = useClearZipPassphrase()
+const testConnectionResource = useTestDbConnection()
+const linuxTestResource = useTestLinuxConnection()
+
+// Only hosts whose last run actually failed carry an error worth showing.
+const failedHosts = computed(
+  () => (props.secretData?.linux_hosts || []).filter(h => h.last_status === 'Failed' && h.last_error)
+)
+
+async function handleTestLinux() {
+  try {
+    const result = await linuxTestResource.submit({ name: props.name })
+    if (result.success) toast.success(result.message || 'All hosts reachable')
+    else toast.error(result.message || 'Some hosts could not be reached')
+    emit('saved')
+  } catch (err) {
+    toast.error(err.messages?.[0] || err.message || 'Could not reach these hosts')
+  }
+}
 const folders = useFolders()
 const clipboard = useClipboard()
 
@@ -399,7 +609,7 @@ function getFolderName(folderId) {
   return found ? found.folder_name : folderId
 }
 
-import { secretFieldsConfig } from '../composables/secretFields'
+import { visibleFieldsFor } from '../composables/secretFields'
 
 const copiedField = ref(null)
 const revealedFields = ref({})
@@ -421,9 +631,12 @@ const editForm = reactive({
   card_number: '',
   card_expiry: '',
   card_cvv: '',
+  database_type: '',
   db_host: '',
   db_port: '',
   db_name: '',
+  db_auth_source: '',
+  db_use_ssl: 0,
   db_password: '',
   ssh_private_key: '',
   attachment: '',
@@ -431,6 +644,16 @@ const editForm = reactive({
   rotation_interval: 90,
   rotation_unit: 'Days',
   zip_passphrase: '',
+  apply_rotation_to_target: 0,
+  rotation_admin_username: '',
+  rotation_admin_password: '',
+  linux_hosts: [],
+  ansible_user: '',
+  ansible_ssh_private_key: '',
+  ansible_become_password: '',
+  ansible_use_become: 1,
+  strict_host_key_checking: 1,
+  ssh_port: 22,
 })
 
 const decryptedData = computed(() => decryptResource.data?.decrypted)
@@ -540,16 +763,34 @@ async function toggleEditMode() {
     editForm.card_number = dd.card_number || ''
     editForm.card_expiry = sd.card_expiry || ''
     editForm.card_cvv = dd.card_cvv || ''
+    editForm.database_type = sd.database_type || ''
     editForm.db_host = sd.db_host || ''
     editForm.db_port = sd.db_port || ''
     editForm.db_name = sd.db_name || ''
+    editForm.db_auth_source = sd.db_auth_source || ''
+    editForm.db_use_ssl = sd.db_use_ssl ? 1 : 0
     editForm.db_password = dd.db_password || ''
     editForm.ssh_private_key = sd.ssh_private_key || ''
     editForm.enable_rotation = sd.enable_rotation ? 1 : 0
     editForm.rotation_interval = sd.rotation_interval || 90
     editForm.rotation_unit = sd.rotation_unit || 'Days'
-    // Never returned by the server (it's encrypted) — always starts blank.
+    editForm.apply_rotation_to_target = sd.apply_rotation_to_target ? 1 : 0
+    editForm.rotation_admin_username = sd.rotation_admin_username || ''
+    // Neither is ever returned by the server (both are encrypted) — a blank
+    // means "keep whatever is stored", so both always start empty.
     editForm.zip_passphrase = ''
+    editForm.rotation_admin_password = ''
+
+    editForm.linux_hosts = (sd.linux_hosts || []).map(h => ({
+      hostname: h.hostname || '', ssh_port: h.ssh_port || '',
+    }))
+    editForm.ansible_user = sd.ansible_user || ''
+    editForm.ansible_use_become = sd.ansible_use_become ? 1 : 0
+    editForm.strict_host_key_checking = sd.strict_host_key_checking ? 1 : 0
+    editForm.ssh_port = sd.ssh_port || 22
+    // Never returned by the server; blank means "keep what is stored".
+    editForm.ansible_ssh_private_key = ''
+    editForm.ansible_become_password = ''
 
     editAttachmentList.value = parseAttachments(sd.attachment)
     syncEditAttachmentForm()
@@ -657,11 +898,7 @@ async function handleSave() {
       url: editForm.url,
     }
 
-    if (editForm.secret_type === 'Password') {
-      payload.username = editForm.username
-      payload.password = editForm.password
-      payload.totp_secret = editForm.totp_secret
-      payload.url = editForm.url
+    if (ROTATABLE_SECRET_TYPES.includes(editForm.secret_type)) {
       payload.enable_rotation = editForm.enable_rotation ? 1 : 0
       if (editForm.enable_rotation) {
         payload.rotation_interval = Number(editForm.rotation_interval) || 90
@@ -672,6 +909,13 @@ async function handleSave() {
           payload.zip_passphrase = editForm.zip_passphrase
         }
       }
+    }
+
+    if (editForm.secret_type === 'Password') {
+      payload.username = editForm.username
+      payload.password = editForm.password
+      payload.totp_secret = editForm.totp_secret
+      payload.url = editForm.url
     } else if (editForm.secret_type === 'API Key') {
       payload.api_key = editForm.api_key
       payload.api_secret = editForm.api_secret
@@ -683,11 +927,39 @@ async function handleSave() {
       payload.card_expiry = editForm.card_expiry
       payload.card_cvv = editForm.card_cvv
     } else if (editForm.secret_type === 'Database') {
+      payload.database_type = editForm.database_type
       payload.db_host = editForm.db_host
       payload.db_port = editForm.db_port
       payload.db_name = editForm.db_name
+      payload.db_auth_source = editForm.db_auth_source
+      payload.db_use_ssl = editForm.db_use_ssl ? 1 : 0
       payload.username = editForm.username
       payload.db_password = editForm.db_password
+
+      const applies = editForm.enable_rotation && editForm.apply_rotation_to_target
+      payload.apply_rotation_to_target = applies ? 1 : 0
+      // Clearing the username is how the pair gets removed, so it is always
+      // sent; the password is only sent when freshly typed (blank = keep).
+      // Unticking "apply to database" clears the username, and the controller
+      // drops the orphaned password with it — a blank password on its own means
+      // "keep what is stored", so it cannot do the clearing.
+      payload.rotation_admin_username = applies ? editForm.rotation_admin_username : ''
+      if (applies && editForm.rotation_admin_password) {
+        payload.rotation_admin_password = editForm.rotation_admin_password
+      }
+    } else if (editForm.secret_type === 'Linux Server') {
+      payload.username = editForm.username
+      payload.password = editForm.password
+      payload.linux_hosts = editForm.linux_hosts
+        .filter(h => (h.hostname || '').trim())
+        .map(h => ({ hostname: h.hostname.trim(), ssh_port: Number(h.ssh_port) || 0 }))
+      payload.ansible_user = editForm.ansible_user
+      payload.ansible_use_become = editForm.ansible_use_become ? 1 : 0
+      payload.strict_host_key_checking = editForm.strict_host_key_checking ? 1 : 0
+      payload.ssh_port = Number(editForm.ssh_port) || 22
+      // Each of these is only sent when freshly typed — blank keeps the stored one.
+      if (editForm.ansible_ssh_private_key) payload.ansible_ssh_private_key = editForm.ansible_ssh_private_key
+      if (editForm.ansible_become_password) payload.ansible_become_password = editForm.ansible_become_password
     } else if (editForm.secret_type === 'SSH Key') {
       payload.username = editForm.username
       payload.ssh_private_key = editForm.ssh_private_key
@@ -711,6 +983,23 @@ async function handleSave() {
     } else {
       toast.error(err.message || 'Failed to save changes')
     }
+  }
+}
+
+// Choosing an engine fills in its default port and Mongo's auth source, but
+// never overwrites something already typed.
+watch(() => editForm.database_type, (engine) => {
+  if (!engine) return
+  if (!editForm.db_port) editForm.db_port = DATABASE_DEFAULT_PORTS[engine] || ''
+  if (engine === 'MongoDB' && !editForm.db_auth_source) editForm.db_auth_source = 'admin'
+})
+
+async function handleTestConnection() {
+  try {
+    const result = await testConnectionResource.submit({ name: props.name })
+    toast.success(result.message || 'Connection succeeded')
+  } catch (err) {
+    toast.error(err.messages?.[0] || err.message || 'Could not reach the database')
   }
 }
 

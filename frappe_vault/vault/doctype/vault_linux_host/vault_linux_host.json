@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "creation": "2026-08-21 13:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "hostname",
+  "ssh_port",
+  "label",
+  "column_break_status",
+  "last_status",
+  "last_applied_on",
+  "last_error"
+ ],
+ "fields": [
+  {
+   "columns": 4,
+   "description": "Hostname, FQDN or IP that Vault connects to over SSH.",
+   "fieldname": "hostname",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Host",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "default": "22",
+   "fieldname": "ssh_port",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "SSH Port"
+  },
+  {
+   "columns": 2,
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label"
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 2,
+   "fieldname": "last_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Last Result",
+   "options": "\nSuccess\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_applied_on",
+   "fieldtype": "Datetime",
+   "label": "Last Applied On",
+   "read_only": 1
+  },
+  {
+   "description": "Why the most recent attempt on this host failed.",
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-21 13:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vault",
+ "name": "Vault Linux Host",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

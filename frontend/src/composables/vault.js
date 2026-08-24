@@ -62,6 +62,32 @@ export function useRotateNow() {
   })
 }
 
+// Tests a connection from unsaved form values, before any secret exists.
+export function useTestDbConnectionParams() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_db_connection_params',
+  })
+}
+
+// Reaches Linux hosts from unsaved form values, before any secret exists.
+export function useTestLinuxConnectionParams() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_linux_connection_params',
+  })
+}
+
+export function useTestLinuxConnection() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_linux_connection',
+  })
+}
+
+export function useTestDbConnection() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_db_connection',
+  })
+}
+
 export function useClearZipPassphrase() {
   return createResource({
     url: 'frappe_vault.api.secrets.clear_zip_passphrase',

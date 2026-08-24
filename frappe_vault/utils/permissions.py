@@ -311,8 +311,8 @@ def has_secret_permission(doc, ptype="read", user=None):
     return False
 
 
-def get_users_with_secret_access(secret_name, include_admins=False):
-    """Return the users who have been granted access to a specific secret.
+def get_secret_access_grants(secret_name, include_admins=False) -> set:
+    """Return the set of users *granted* access to a secret.
 
     This is the inverse of `get_secret_permission_query` — same access model,
     resolved forwards from a secret to its people instead of backwards from a
@@ -331,22 +331,24 @@ def get_users_with_secret_access(secret_name, include_admins=False):
     always included regardless of any stray/override share row.
 
     Vault Admins and System Managers are excluded by default. The role bypass
-    lets them read every secret, but they were not "given access" to any
-    particular one, and including them would mail them every rotation in the
-    system. Pass include_admins=True to add them.
+    lets them administer every secret, but they were not "given access" to any
+    particular one. Pass include_admins=True to add them.
 
-    Only enabled users with an email address are returned; Guest never is.
+    This is the single definition of "was given access to this secret". Both
+    `get_users_with_secret_access` (who gets mailed a rotation) and
+    `can_reveal_secret_value` (who may decrypt it) derive from it, so the two
+    can never drift apart.
 
     Args:
         secret_name: Vault Secret document name
         include_admins: also return Vault Admin / System Manager users
 
     Returns:
-        Sorted list of user IDs
+        Set of user IDs
     """
     secret = frappe.db.get_value("Vault Secret", secret_name, ["owner", "folder"], as_dict=True)
     if not secret:
-        return []
+        return set()
 
     always_included = {u for u in (secret.owner,) if u}
     if secret.folder:
@@ -412,6 +414,26 @@ def get_users_with_secret_access(secret_name, include_admins=False):
     candidates.discard("Guest")
     candidates.discard(None)
 
+    return candidates
+
+
+def get_users_with_secret_access(secret_name, include_admins=False):
+    """The users who should receive a copy of this secret, e.g. a rotation mail.
+
+    `get_secret_access_grants` narrowed to accounts that can actually receive
+    mail. That filter belongs to delivery only — never reuse this to decide
+    whether somebody may *see* a value, or a user without an email address on
+    their account would be refused their own secret. Use
+    `can_reveal_secret_value` for that.
+
+    Args:
+        secret_name: Vault Secret document name
+        include_admins: also return Vault Admin / System Manager users
+
+    Returns:
+        Sorted list of user IDs
+    """
+    candidates = get_secret_access_grants(secret_name, include_admins=include_admins)
     if not candidates:
         return []
 
@@ -423,6 +445,34 @@ def get_users_with_secret_access(secret_name, include_admins=False):
     )
 
     return sorted(u.name for u in deliverable if u.email)
+
+
+def can_reveal_secret_value(secret_name, user=None) -> bool:
+    """Whether `user` may decrypt this secret's stored values.
+
+    Deliberately does NOT honour the Vault Admin / System Manager / Administrator
+    bypass that governs every other permission here. Those roles administer the
+    vault — list secrets, move them, manage shares, read the audit trail — but
+    administering a secret is not the same as being entitled to read what is
+    inside it. Only the people actually granted the secret qualify: its owner,
+    its folder's owner, and holders of an active share.
+
+    Scope, stated plainly: this is an application-level control, not a
+    cryptographic one. Values are encrypted with the site-wide encryption key,
+    so anyone with shell or database access to this server — which includes
+    whoever holds the Administrator account in practice — can still decrypt them
+    directly, without going through this function. What this stops is casual
+    reading through the app, and it makes every reveal attributable in the audit
+    log. Making it genuinely impossible would require encrypting each secret to
+    keys the server never holds.
+    """
+    if not user:
+        user = frappe.session.user
+
+    if not user or user == "Guest":
+        return False
+
+    return user in get_secret_access_grants(secret_name)
 
 
 def get_folder_permission_query(user=None):

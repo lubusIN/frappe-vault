@@ -91,7 +91,9 @@ class TestSecurityExploits(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError) as context:
             get_decrypted_secret_data(self.secret.get("name"))
 
-        self.assertIn("Not permitted", str(context.exception))
+        # Refusal is the property under test; the wording explains that viewing
+        # values is granted per-secret rather than by role.
+        self.assertIn("can view its values", str(context.exception))
 
     def test_has_file_permission_non_vault_file(self):
         from frappe_vault.utils.permissions import has_file_permission

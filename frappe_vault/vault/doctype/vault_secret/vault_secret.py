@@ -17,6 +17,20 @@ MIN_HISTORY_ROWS = 10
 # vault_rotation_zip_password minimum in utils/archive.py.
 MIN_ZIP_PASSPHRASE_LENGTH = 12
 
+# Which encrypted field a secret type's rotation, history, reuse policy and
+# strength score act on. A type absent from this map cannot be rotated at all.
+ROTATABLE_FIELD_BY_TYPE = {
+    "Password": "password",
+    "Database": "db_password",
+    "Linux Server": "password",
+}
+
+# Types whose rotation must reach the real system it belongs to. A rotation that
+# only changed the stored value would leave the vault holding a password the
+# server has never heard of, which is worse than not rotating at all: nobody can
+# log in, and nobody can tell why.
+SYNCED_TYPES = ("Database", "Linux Server")
+
 
 class VaultSecret(Document):
     """Controller for Vault Secret — the core secrets storage DocType."""
@@ -24,6 +38,7 @@ class VaultSecret(Document):
     def validate(self):
         """Validate the secret before saving."""
         self.validate_title()
+        self.validate_linux_config()
         self.validate_rotation_config()
         self.validate_zip_passphrase()
         self.check_password_reuse()
@@ -85,20 +100,23 @@ class VaultSecret(Document):
                 )
 
     def calculate_password_strength(self):
-        """Auto-calculate password strength when password changes."""
-        if self.secret_type == "Password" and self.password:
-            from frappe_vault.services.generator_service import calculate_password_strength
+        """Auto-calculate strength whenever the rotating value changes."""
+        if not self.has_plaintext_password():
+            return
 
-            strength = calculate_password_strength(self.password)
-            self.password_strength = strength.get("level", "")
+        from frappe_vault.services.generator_service import calculate_password_strength
+
+        strength = calculate_password_strength(self.get_rotating_value())
+        self.password_strength = strength.get("level", "")
 
     def before_save(self):
         """Track password changes and maintain rotation schedule."""
-        if self.is_new() or self.has_value_changed("password"):
+        if self.is_new() or self.has_value_changed(self.rotating_field or "password"):
             self.password_last_changed = today()
 
         self.append_password_history()
         self.update_has_zip_passphrase()
+        self.clear_orphaned_rotation_admin()
         self.compute_next_rotation()
 
     def after_insert(self):
@@ -126,18 +144,56 @@ class VaultSecret(Document):
     # Rotation
     # ------------------------------------------------------------------
 
+    @property
+    def rotating_field(self) -> str | None:
+        """The encrypted fieldname this secret's rotation machinery acts on.
+
+        `password` for a Password secret, `db_password` for a Database one, and
+        None for a type that cannot be rotated.
+        """
+        return ROTATABLE_FIELD_BY_TYPE.get(self.secret_type)
+
+    def get_rotating_value(self) -> str | None:
+        """The in-memory value of the rotating field, whatever it is called."""
+        field = self.rotating_field
+        return self.get(field) if field else None
+
     def has_plaintext_password(self) -> bool:
-        """True when `self.password` currently holds a real, newly-set password.
+        """True when the rotating field currently holds a real, newly-set value.
 
         Password fields only hold plaintext between the caller assigning them and
         `_save_passwords()` replacing the value with a `"*" * len` mask on write.
         A document loaded from the DB carries that mask, not the secret — hashing
         or strength-checking it would be meaningless.
         """
-        if not self.password or self.is_dummy_password(self.password):
+        field = self.rotating_field
+        if not field:
             return False
 
-        return bool(self.is_new() or self.has_value_changed("password"))
+        value = self.get(field)
+        if not value or self.is_dummy_password(value):
+            return False
+
+        if self.is_new():
+            return True
+
+        if not self.has_value_changed(field):
+            return False
+
+        # Re-submitting the value that is already stored is not a change of
+        # password. The edit form is populated with the decrypted value, so
+        # saving any other field sends it back verbatim; against the masked
+        # value held in the row that looks like a brand new password, and the
+        # reuse policy would then reject the save for reusing the password the
+        # secret already has.
+        # Read straight from storage: Document.get_password() short-circuits to
+        # the in-memory value when one is set, which here is the very value being
+        # compared — that would make every password look unchanged and quietly
+        # disable history, the reuse policy and strength scoring alike.
+        from frappe.utils.password import get_decrypted_password
+
+        stored = get_decrypted_password(self.doctype, self.name, field, raise_exception=False)
+        return stored != value
 
     # ------------------------------------------------------------------
     # Custom rotation passphrase
@@ -187,6 +243,17 @@ class VaultSecret(Document):
         """
         self.has_zip_passphrase = 1 if self.zip_passphrase else 0
 
+    def clear_orphaned_rotation_admin(self):
+        """Drop the rotation admin password once its username is gone.
+
+        Clearing the username is how the UI removes the pair; leaving the
+        password behind would keep a privileged credential stored for an account
+        nothing references any more.
+        """
+        if not (self.rotation_admin_username or "").strip():
+            self.rotation_admin_username = ""
+            self.rotation_admin_password = ""
+
     def clear_zip_passphrase(self):
         """Remove passphrase protection, restoring this secret to the shared passphrase."""
         self.zip_passphrase = ""
@@ -195,12 +262,15 @@ class VaultSecret(Document):
     def validate_rotation_config(self):
         """Reject rotation settings that the rotation job could not act on."""
         if not self.enable_rotation:
+            # A disabled schedule cannot apply anything to a server either.
+            self.apply_rotation_to_target = 0
             return
 
-        if self.secret_type != "Password":
+        if not self.rotating_field:
             frappe.throw(
-                _("Automatic rotation is only supported for secrets of type 'Password', not '{0}'.").format(
-                    self.secret_type
+                _("Automatic rotation is only supported for secrets of type {0} — not '{1}'.").format(
+                    ", ".join(f"'{t}'" for t in sorted(ROTATABLE_FIELD_BY_TYPE)),
+                    self.secret_type,
                 )
             )
 
@@ -210,17 +280,143 @@ class VaultSecret(Document):
         if self.rotation_unit not in ("Days", "Hours"):
             frappe.throw(_("Interval Unit must be either 'Days' or 'Hours'."))
 
-    def check_password_reuse(self):
-        """Block reuse of a recent password, per the Vault Settings policy.
+        # Rotating a Database or Linux credential always reaches the real system.
+        # It is not an option to turn off: the whole value of rotating these is
+        # that the vault and the server keep agreeing with each other.
+        if self.secret_type in SYNCED_TYPES:
+            self.apply_rotation_to_target = 1
 
-        Compares against one-way hashes only; previous plaintext is never stored.
+        if self.secret_type != "Linux Server":
+            self.validate_target_apply_config()
+
+    def validate_linux_config(self):
+        """Reject a Linux setup the rotation job could not act on.
+
+        Runs for every Linux Server secret, not only rotating ones: the hosts and
+        the automation account are what the type *is*, and a secret stored
+        half-configured today becomes a rotation that fails unattended the moment
+        somebody enables it.
         """
+        if self.secret_type != "Linux Server":
+            return
+
+        hosts = [r for r in (self.get("linux_hosts") or []) if (r.hostname or "").strip()]
+        if not hosts:
+            frappe.throw(
+                _(
+                    "Add at least one host. A Linux rotation has nowhere to apply the new password without one."
+                )
+            )
+
+        seen = set()
+        for row in hosts:
+            hostname = row.hostname.strip()
+            if hostname in seen:
+                frappe.throw(_("Host '{0}' is listed more than once.").format(hostname))
+            seen.add(hostname)
+
+        if not self.username:
+            frappe.throw(_("Username is required — it names the Linux account whose password is changed."))
+
+        if not (self.ansible_user or "").strip():
+            frappe.throw(_("An Ansible User is required to reach these hosts."))
+
+        if self.ansible_user.strip() == self.username.strip():
+            frappe.throw(
+                _(
+                    "The Ansible User cannot be the account being rotated ('{0}') — changing its password "
+                    "would lock Vault out of these hosts."
+                ).format(self.username)
+            )
+
+        # SSH key only, deliberately: no password path for the automation account,
+        # so there is no SSH credential for it sitting in the vault to brute-force
+        # or reuse.
+        if not self.ansible_ssh_private_key:
+            frappe.throw(
+                _(
+                    "An SSH Private Key is required. Vault only connects to Linux hosts by key, never a "
+                    "password."
+                )
+            )
+
+    def validate_target_apply_config(self):
+        """Reject an 'apply to the live database' setup the rotation job could not carry out.
+
+        Everything here is checked at save time rather than at rotation time: a
+        secret that silently fails its first unattended rotation is worse than
+        one that refuses to be saved half-configured.
+        """
+        if not self.apply_rotation_to_target:
+            return
+
+        if self.secret_type != "Database":
+            frappe.throw(
+                _("Applying a rotated password to a live server is only supported for Database secrets.")
+            )
+
+        from frappe_vault.services.db_rotation_service import SUPPORTED_DATABASE_TYPES
+
+        if self.database_type not in SUPPORTED_DATABASE_TYPES:
+            frappe.throw(
+                _(
+                    "Choose a Database Type ({0}) before enabling 'Apply New Password to the Database'."
+                ).format(", ".join(SUPPORTED_DATABASE_TYPES))
+            )
+
+        if not self.db_host:
+            frappe.throw(_("Host is required to apply a rotated password to the database."))
+
+        if not self.username:
+            frappe.throw(
+                _("Username is required — it names the database account whose password gets changed.")
+            )
+
+        # An admin credential is required rather than optional: relying on the
+        # account to change its own password fails on any server that withholds
+        # that privilege, and it fails unattended, hours after the setup that
+        # caused it. Requiring it here means the Test Connection step can prove
+        # the whole path works before anything is saved.
+        if not (self.rotation_admin_username or "").strip():
+            frappe.throw(
+                _(
+                    "A Rotation Admin Username is required to apply a rotated password to the database. "
+                    "It is the account Vault authenticates as to reset '{0}'."
+                ).format(self.username or "this account")
+            )
+
+        if not self.rotation_admin_password:
+            frappe.throw(_("A Rotation Admin Password is required alongside a Rotation Admin Username."))
+
+    def check_password_reuse(self):
+        """Block reuse of a recent password, per the Vault Settings policy."""
         if not self.has_plaintext_password():
             return
 
         reuse_count = cint(frappe.db.get_single_value("Vault Settings", "prevent_reuse_count"))
+        if self.is_password_reused(self.get_rotating_value(), reuse_count):
+            frappe.throw(
+                _("This password was used within the last {0} change(s). Choose a different one.").format(
+                    reuse_count
+                )
+            )
+
+    def is_password_reused(self, candidate: str, reuse_count: int | None = None) -> bool:
+        """True when `candidate` matches a recent entry in this secret's history.
+
+        Compares against one-way hashes only; previous plaintext is never stored.
+        Rotation calls this to screen a generated password *before* pushing it to
+        a live database — discovering the clash on the way back in, after the
+        server had already accepted it, would leave the two out of sync.
+        """
+        if not candidate:
+            return False
+
+        if reuse_count is None:
+            reuse_count = cint(frappe.db.get_single_value("Vault Settings", "prevent_reuse_count"))
+
         if reuse_count < 1:
-            return
+            return False
 
         from frappe.utils.password import passlibctx
 
@@ -230,17 +426,13 @@ class VaultSecret(Document):
             if not row.password_hash:
                 continue
             try:
-                if passlibctx.verify(self.password, row.password_hash):
-                    frappe.throw(
-                        _(
-                            "This password was used within the last {0} change(s). Choose a different one."
-                        ).format(reuse_count)
-                    )
-            except frappe.ValidationError:
-                raise
+                if passlibctx.verify(candidate, row.password_hash):
+                    return True
             except Exception:
                 # A malformed or legacy hash must never block saving a secret.
                 frappe.log_error(title=f"Vault Password History Verify Error ({self.name})")
+
+        return False
 
     def append_password_history(self):
         """Record a one-way hash of a newly set password."""
@@ -252,7 +444,7 @@ class VaultSecret(Document):
         self.append(
             "password_history",
             {
-                "password_hash": passlibctx.hash(self.password),
+                "password_hash": passlibctx.hash(self.get_rotating_value()),
                 "rotated_on": now_datetime(),
                 "rotated_by": frappe.session.user if frappe.session else "Administrator",
                 "source": "Auto Rotation" if self.flags.get("vault_auto_rotation") else "Manual",

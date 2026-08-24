@@ -14,7 +14,9 @@
   "require_special",
   "max_password_age_days",
   "prevent_reuse_count",
-  "log_retention_days"
+  "log_retention_days",
+  "rotation_delivery_section",
+  "send_rotation_emails"
  ],
  "fields": [
   {
@@ -79,13 +81,25 @@
    "fieldname": "log_retention_days",
    "fieldtype": "Int",
    "label": "Log Retention (days)"
+  },
+  {
+   "fieldname": "rotation_delivery_section",
+   "fieldtype": "Section Break",
+   "label": "Rotation Delivery"
+  },
+  {
+   "default": "0",
+   "description": "Email each rotated password to everyone with access, as an AES-256 encrypted archive. Off by default: rotation happens regardless, and the new value is readable in Vault by the people the secret belongs to. Turning this on also requires the 'pyzipper' package, a default outgoing Email Account, and the vault_rotation_zip_password site config key.",
+   "fieldname": "send_rotation_emails",
+   "fieldtype": "Check",
+   "label": "Email Rotated Passwords"
   }
  ],
  "index_web_pages_for_search": 0,
  "is_submittable": 0,
  "issingle": 1,
  "links": [],
- "modified": "2026-05-13 10:00:00.000000",
+ "modified": "2026-08-21 11:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vault",
  "name": "Vault Settings",

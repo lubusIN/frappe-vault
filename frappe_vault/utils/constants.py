@@ -35,6 +35,15 @@ AUDIT_ACTIONS = [
     "Login",
 ]
 
+# Database engines a Database secret can name, and whose password rotation can
+# be applied to the live server. Must match the Vault Secret `database_type`
+# Select options and services/db_rotation_service.SUPPORTED_DATABASE_TYPES.
+DATABASE_TYPES = [
+    "PostgreSQL",
+    "MySQL / MariaDB",
+    "MongoDB",
+]
+
 # Password strength levels
 STRENGTH_LEVELS = ["weak", "fair", "good", "strong", "excellent"]
 
@@ -43,7 +52,7 @@ ENCRYPTED_FIELDS = {
     "Password": ["password"],
     "API Key": ["api_secret"],
     "Credit Card": ["card_number", "card_cvv"],
-    "Database": ["db_password"],
+    "Database": ["db_password", "rotation_admin_password"],
     "SSH Key": [],  # ssh_private_key is Code field, not Password
     "Media": [],
     "Note": [],
@@ -58,6 +67,7 @@ SENSITIVE_FIELDS = [
     "card_cvv",
     "db_password",
     "ssh_private_key",
+    "rotation_admin_password",
 ]
 
 # Safe fields for list view

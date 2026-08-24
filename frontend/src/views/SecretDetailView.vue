@@ -46,6 +46,7 @@
               :secret-data="secretData || {}"
               :can-edit="canEdit"
               :can-copy="canCopy"
+              :can-reveal="canReveal"
               @open-totp="showTotpDialog = true"
               @open-rotate="openRotateDialog"
               @saved="handleSecretSaved"
@@ -109,8 +110,17 @@
       <template #body-content>
         <div class="space-y-3">
           <p class="text-sm text-ink-gray-6 leading-normal">
-            Generate a new password now and email it to everyone with access
-            <span v-if="secretData?.has_zip_passphrase">, as an archive opened with this secret's custom passphrase</span>.
+            Generate a new password now. Everyone with access is notified, and can read the new value
+            here on this page.
+          </p>
+          <p v-if="secretData?.apply_rotation_to_target" class="text-sm text-ink-gray-6 leading-normal">
+            The password will also be changed on the live
+            <strong>{{ secretData?.database_type || 'database' }}</strong> at
+            <strong>{{ secretData?.db_host }}</strong>. Anything still connecting with the old password
+            &mdash; applications, config files, connection strings &mdash; will start failing until it is
+            updated. If the server refuses the change, nothing here is modified either.
+          </p>
+          <p v-else class="text-sm text-ink-gray-6 leading-normal">
             The current password is replaced in Vault only &mdash; it is <strong>not</strong> changed on the
             target system, you must apply it there yourself.
           </p>
@@ -246,7 +256,16 @@ const currentSessionUser = computed(() => {
 
 const userPermission = computed(() => secretData.value?.user_permission || 'View Only')
 
+// Decided by the server, and deliberately not inferable from roles: the admin
+// bypass that grants every other permission here does not grant sight of a
+// secret's values.
+const canReveal = computed(() => !!secretData.value?.can_reveal)
+
 const canEdit = computed(() => {
+  // The edit form is populated from the decrypted values, so it cannot be
+  // opened by someone who may not see them. Administering a secret — moving,
+  // deleting, managing its shares — does not depend on this.
+  if (!canReveal.value) return false
   if (stats.data?.is_admin) return true
   if (currentSessionUser.value === 'Administrator') return true
   const roles = window.frappe?.user_roles || window.frappe?.boot?.user?.roles || []
@@ -265,6 +284,8 @@ const canDelete = computed(() => {
 })
 
 const canCopy = computed(() => {
+  // Copying a stored value means decrypting it first.
+  if (!canReveal.value) return false
   if (stats.data?.is_admin) return true
   if (currentSessionUser.value === 'Administrator') return true
   const roles = window.frappe?.user_roles || window.frappe?.boot?.user?.roles || []
