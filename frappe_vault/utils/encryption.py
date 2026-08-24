@@ -96,6 +96,13 @@ def get_decrypted_secret_data(secret_name: str, ignore_permissions: bool = False
         # rotation_admin_password is deliberately absent: it is an operational
         # credential the rotation job retrieves server-side, never something the
         # UI needs back — exactly like zip_passphrase.
+    elif doc.secret_type == "Linux Server":
+        result["username"] = doc.username
+        result["password"] = decrypt_secret_field("Vault Secret", secret_name, "password")
+        # ansible_ssh_private_key is deliberately absent, same reasoning as
+        # Database's rotation_admin_password: it is the operational credential
+        # the rotation job retrieves server-side to reach the account above,
+        # never something the UI needs to hand back.
     elif doc.secret_type == "SSH Key":
         result["username"] = doc.username
         result["ssh_private_key"] = doc.ssh_private_key

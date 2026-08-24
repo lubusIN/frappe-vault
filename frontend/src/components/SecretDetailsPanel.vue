@@ -146,6 +146,14 @@
             :placeholder="secretData.has_ansible_ssh_private_key ? 'Leave blank to keep the stored key' : ''"
             class="w-full text-xs font-mono"
           />
+          <p v-if="keyFingerprint" class="text-xs font-mono text-ink-gray-6 leading-relaxed break-all">
+            <FeatherIcon name="key" class="w-3.5 h-3.5 inline -mt-0.5 mr-1 shrink-0" />
+            {{ keyFingerprint.fingerprint }} ({{ keyFingerprint.comment }})
+            <span class="text-ink-gray-4">&mdash; check this matches what you installed on the server</span>
+          </p>
+          <p v-else-if="keyFingerprintError" class="text-xs text-ink-red-3 leading-relaxed">
+            {{ keyFingerprintError }}
+          </p>
 
           <div class="grid grid-cols-2 gap-4">
             <FormControl type="checkbox" label="Use sudo (become)" v-model="editForm.ansible_use_become" />
@@ -545,6 +553,7 @@ import {
   useClearZipPassphrase,
   useTestDbConnection,
   useTestLinuxConnection,
+  useFingerprintSshKey,
 } from '../composables/vault'
 import { secretTypeOptions, ROTATION_UNITS, ROTATABLE_SECRET_TYPES, SYNCED_SECRET_TYPES, DATABASE_DEFAULT_PORTS, formatRelativeTime } from '../composables/constants'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
@@ -570,6 +579,29 @@ const updateResource = useUpdateSecret()
 const clearPassphraseResource = useClearZipPassphrase()
 const testConnectionResource = useTestDbConnection()
 const linuxTestResource = useTestLinuxConnection()
+
+// Identifies whatever is pasted into the SSH key field so it can be checked
+// against what was actually installed on the server, before Test Connection
+// (or worse, a live rotation) ever runs on the wrong credential.
+const fingerprintResource = useFingerprintSshKey()
+const keyFingerprint = ref(null)
+const keyFingerprintError = ref('')
+let fingerprintTimer = null
+
+watch(() => editForm.ansible_ssh_private_key, (key) => {
+  keyFingerprint.value = null
+  keyFingerprintError.value = ''
+  clearTimeout(fingerprintTimer)
+  if (!key || !key.trim()) return
+
+  fingerprintTimer = setTimeout(async () => {
+    try {
+      keyFingerprint.value = await fingerprintResource.submit({ ssh_private_key: key })
+    } catch (err) {
+      keyFingerprintError.value = err.messages?.[0] || err.message || 'Could not read this key'
+    }
+  }, 500)
+})
 
 // Only hosts whose last run actually failed carry an error worth showing.
 const failedHosts = computed(

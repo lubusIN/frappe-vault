@@ -68,6 +68,14 @@
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
                 class="font-mono text-xs"
               />
+              <p v-if="keyFingerprint" class="text-xs font-mono text-ink-gray-6 leading-relaxed break-all">
+                <FeatherIcon name="key" class="w-3.5 h-3.5 inline -mt-0.5 mr-1 shrink-0" />
+                {{ keyFingerprint.fingerprint }} ({{ keyFingerprint.comment }})
+                <span class="text-ink-gray-4">&mdash; check this matches what you installed on the server</span>
+              </p>
+              <p v-else-if="keyFingerprintError" class="text-xs text-ink-red-3 leading-relaxed">
+                {{ keyFingerprintError }}
+              </p>
 
               <div class="grid grid-cols-2 gap-4">
                 <FormControl type="checkbox" label="Use sudo (become)" v-model="form.ansible_use_become" />
@@ -393,7 +401,7 @@ import { ref, computed, watch } from 'vue'
 import { Dialog, FormControl, Button, FeatherIcon, toast } from 'frappe-ui'
 import { SECRET_TYPES, ROTATION_UNITS, DATABASE_TYPES, DATABASE_DEFAULT_PORTS } from '../composables/constants'
 import { visibleFieldsFor } from '../composables/secretFields'
-import { useFolders, useCreateSecret, useTestDbConnectionParams, useTestLinuxConnectionParams } from '../composables/vault'
+import { useFolders, useCreateSecret, useTestDbConnectionParams, useTestLinuxConnectionParams, useFingerprintSshKey } from '../composables/vault'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
 import { validateTotpSecret } from '../utils/secretForm'
 
@@ -443,6 +451,31 @@ const linuxTestResource = useTestLinuxConnectionParams()
 const hostResults = ref([])
 const showBulkHosts = ref(false)
 const bulkHosts = ref('')
+
+// Identifies whatever is pasted into the SSH key field so it can be checked
+// against what was actually installed on the server, before Test Connection
+// (or worse, a live rotation) ever runs on the wrong credential.
+const fingerprintResource = useFingerprintSshKey()
+const keyFingerprint = ref(null)
+const keyFingerprintError = ref('')
+let fingerprintTimer = null
+
+watch(() => form.value.ansible_ssh_private_key, (key) => {
+  keyFingerprint.value = null
+  keyFingerprintError.value = ''
+  clearTimeout(fingerprintTimer)
+  if (!key || !key.trim()) return
+
+  // Debounced: fingerprinting mid-paste on every keystroke would just show a
+  // string of "not a usable key" errors while the textarea is half-populated.
+  fingerprintTimer = setTimeout(async () => {
+    try {
+      keyFingerprint.value = await fingerprintResource.submit({ ssh_private_key: key })
+    } catch (err) {
+      keyFingerprintError.value = err.messages?.[0] || err.message || 'Could not read this key'
+    }
+  }, 500)
+})
 
 function addHost(hostname = '', ssh_port = '') {
   form.value.linux_hosts.push({ hostname, ssh_port })
@@ -557,6 +590,8 @@ watch(show, (v) => {
     showSecrets.value = false
     testState.value = 'untested'
     testMessage.value = ''
+    keyFingerprint.value = null
+    keyFingerprintError.value = ''
   }
 })
 

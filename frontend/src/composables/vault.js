@@ -69,6 +69,14 @@ export function useTestDbConnectionParams() {
   })
 }
 
+// Identifies a pasted SSH private key (type, fingerprint, comment) without
+// storing it, so a wrong-key paste is visible before Test Connection runs.
+export function useFingerprintSshKey() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.fingerprint_ssh_key',
+  })
+}
+
 // Reaches Linux hosts from unsaved form values, before any secret exists.
 export function useTestLinuxConnectionParams() {
   return createResource({

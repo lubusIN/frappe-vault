@@ -218,6 +218,58 @@ def hash_password(plaintext: str) -> str:
     return sha512_crypt.using(rounds=5000).hash(plaintext)
 
 
+def fingerprint_key(private_key: str) -> dict:
+    """Identify a private key without exposing or storing it.
+
+    Backs a paste-time check in the UI: pasting the wrong key — a real,
+    repeat-tripping mistake when several keys have been shared in the same
+    place — looks identical to a typo until something actually connects. A
+    fingerprint lets it be checked against `ssh-keygen -lf` on the key that
+    was actually installed on the target server, before Test Connection ever
+    runs.
+
+    Uses the real `ssh-keygen` binary rather than a hand-rolled parser, so
+    this never gives a false reading through the exact tool that generated
+    the key in the first place. Raises LinuxApplyError with an operator
+    -readable reason if the text is not a usable private key; never raises for
+    a merely-unfinished paste — the caller treats that as "nothing to show
+    yet", not an error.
+    """
+    private_key = (private_key or "").strip()
+    if not private_key:
+        frappe.throw(_("No key to fingerprint."), LinuxApplyError)
+
+    workdir = tempfile.mkdtemp(prefix="vault-fp-")
+    os.chmod(workdir, stat.S_IRWXU)  # 0700
+    try:
+        key_path = _write_private(workdir, "id_key", private_key.strip() + "\n")
+        completed = subprocess.run(  # noqa: S603 — fixed binary, local temp file only
+            ["/usr/bin/ssh-keygen", "-lf", key_path],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    if completed.returncode != 0 or not completed.stdout.strip():
+        frappe.throw(_("That doesn't look like a usable private key."), LinuxApplyError)
+
+    # `ssh-keygen -lf` prints: "<bits> SHA256:<fingerprint> <comment> (<type>)"
+    parts = completed.stdout.strip().split(None, 2)
+    bits = parts[0] if len(parts) > 0 else ""
+    sha256 = parts[1] if len(parts) > 1 else ""
+    rest = parts[2] if len(parts) > 2 else ""
+    comment, _sep, key_type = rest.rpartition(" ")
+
+    return {
+        "bits": bits,
+        "fingerprint": sha256,
+        "comment": comment.strip() or "(no comment)",
+        "key_type": key_type.strip("()"),
+    }
+
+
 def ping(target: LinuxTarget) -> RunResult:
     """Reach every host without changing anything.
 

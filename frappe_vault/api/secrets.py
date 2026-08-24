@@ -291,6 +291,26 @@ def test_db_connection(name: str) -> dict:
 
 
 @frappe.whitelist()
+@rate_limit(limit=60, seconds=60 * 60)
+def fingerprint_ssh_key(ssh_private_key: str) -> dict:
+    """Identify a pasted SSH private key without storing or logging it.
+
+    Backs a paste-time check in the create/edit forms: show the fingerprint of
+    whatever was just pasted so it can be compared against what was actually
+    installed on the target server, catching a wrong-key paste before Test
+    Connection — or worse, a live rotation — ever runs. The key is written to
+    a private temp file for the moment `ssh-keygen` needs it and never
+    persisted.
+    """
+    if not frappe.has_permission("Vault Secret", "create"):
+        frappe.throw(_("You don't have permission to create secrets"), frappe.PermissionError)
+
+    from frappe_vault.services.linux_rotation_service import fingerprint_key
+
+    return fingerprint_key(ssh_private_key)
+
+
+@frappe.whitelist()
 @rate_limit(limit=30, seconds=60 * 60)
 def test_linux_connection_params(
     username: str,

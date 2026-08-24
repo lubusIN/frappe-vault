@@ -346,3 +346,97 @@ class TestLinuxConnectionEndpoint(FrappeTestCase):
                 ansible_user="automation",
                 ansible_ssh_private_key="",
             )
+
+
+class TestFingerprintKey(FrappeTestCase):
+    """Identifying a pasted key without storing it.
+
+    Backs the paste-time UI check: pasting the wrong key — a real, repeated
+    mistake once several keys have been shared in the same place — looks
+    identical to a typo until something actually tries to connect. This is
+    what lets it be caught before that.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import tempfile
+
+        cls._workdir = tempfile.mkdtemp(prefix="test-fingerprint-")
+        cls.real_key = cls._generate_key("id_a", "test@fixture")
+        cls.other_key = cls._generate_key("id_b", "other@fixture")
+
+    @classmethod
+    def _generate_key(cls, filename, comment):
+        import subprocess
+
+        key_path = f"{cls._workdir}/{filename}"
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", comment, "-f", key_path],
+            check=True,
+            capture_output=True,
+        )
+        with open(key_path) as fh:
+            return fh.read()
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+
+        shutil.rmtree(cls._workdir, ignore_errors=True)
+        super().tearDownClass()
+
+    def test_a_real_key_is_identified(self):
+        from frappe_vault.services.linux_rotation_service import fingerprint_key
+
+        result = fingerprint_key(self.real_key)
+
+        self.assertTrue(result["fingerprint"].startswith("SHA256:"))
+        self.assertEqual(result["comment"], "test@fixture")
+        self.assertEqual(result["key_type"], "ED25519")
+
+    def test_two_different_keys_have_different_fingerprints(self):
+        # The entire point of the feature — confirms fingerprinting actually
+        # distinguishes keys rather than always returning something plausible.
+        from frappe_vault.services.linux_rotation_service import fingerprint_key
+
+        mine = fingerprint_key(self.real_key)
+        other = fingerprint_key(self.other_key)
+        self.assertNotEqual(mine["fingerprint"], other["fingerprint"])
+
+    def test_garbage_is_rejected_not_misreported(self):
+        from frappe_vault.services.linux_rotation_service import fingerprint_key
+
+        with self.assertRaises(LinuxApplyError):
+            fingerprint_key("not a key at all")
+
+    def test_empty_input_is_rejected(self):
+        from frappe_vault.services.linux_rotation_service import fingerprint_key
+
+        with self.assertRaises(LinuxApplyError):
+            fingerprint_key("")
+
+    def test_nothing_written_survives_the_call(self):
+        # The key must never be persisted anywhere on disk after fingerprinting.
+        import subprocess
+
+        from frappe_vault.services.linux_rotation_service import fingerprint_key
+
+        fingerprint_key(self.real_key)
+
+        leftover = subprocess.run(
+            ["find", "/tmp", "-maxdepth", "1", "-name", "vault-fp-*"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(leftover.stdout.strip(), "")
+
+    def test_endpoint_requires_create_permission(self):
+        from frappe_vault.api.secrets import fingerprint_ssh_key
+
+        frappe.set_user("Guest")
+        try:
+            with self.assertRaises(frappe.PermissionError):
+                fingerprint_ssh_key(ssh_private_key=self.real_key)
+        finally:
+            frappe.set_user("Administrator")
