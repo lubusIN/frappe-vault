@@ -167,10 +167,10 @@ def test_db_connection_params(
     username: str,
     admin_username: str,
     admin_password: str,
-    db_port=None,
+    db_port: int | str | None = None,
     db_name: str | None = None,
     db_auth_source: str | None = None,
-    db_use_ssl=0,
+    db_use_ssl: bool = False,
 ) -> dict:
     """Test a database connection from form values, before any secret exists.
 
@@ -293,13 +293,13 @@ def test_db_connection(name: str) -> dict:
 @rate_limit(limit=30, seconds=60 * 60)
 def test_linux_connection_params(
     username: str,
-    hosts,
+    hosts: str | builtins.list,
     ansible_user: str,
     ansible_ssh_private_key: str,
     ansible_become_password: str | None = None,
-    ansible_use_become=1,
-    strict_host_key_checking=1,
-    ssh_port=22,
+    ansible_use_become: bool = True,
+    strict_host_key_checking: bool = True,
+    ssh_port: int | str = 22,
 ) -> dict:
     """Reach a set of Linux hosts from form values, before any secret exists.
 

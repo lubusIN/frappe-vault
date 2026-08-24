@@ -141,9 +141,7 @@ class TestSecretValueAccess(FrappeTestCase):
         self.assertFalse(can_reveal_secret_value(self.secret.name, "Administrator"))
 
     def test_administrator_may_reveal_a_secret_they_do_own(self):
-        frappe.db.set_value(
-            "Vault Secret", self.secret.name, "owner", "Administrator", update_modified=False
-        )
+        frappe.db.set_value("Vault Secret", self.secret.name, "owner", "Administrator", update_modified=False)
         self.assertTrue(can_reveal_secret_value(self.secret.name, "Administrator"))
 
     def test_admin_is_refused_by_the_decrypt_path_itself(self):

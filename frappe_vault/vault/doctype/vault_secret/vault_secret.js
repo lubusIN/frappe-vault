@@ -56,7 +56,7 @@ frappe_vault.setup_rotation_ui = function(frm) {
 
     if (frm.doc.enable_rotation && frm.doc.next_rotation_on) {
         const passphrase_note = frm.doc.has_zip_passphrase
-            ? __(" Its archive opens with this secret's own custom passphrase, not the shared site one.")
+            ? " " + __("Its archive opens with this secret's own custom passphrase, not the shared site one.")
             : "";
         frm.set_intro(
             __("Automatic rotation is on. Next rotation {0} — every {1} {2}. A new password will be emailed to everyone with access as an encrypted archive, and will need applying to the target system manually.", [

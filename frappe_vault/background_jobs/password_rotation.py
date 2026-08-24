@@ -262,9 +262,7 @@ def _generate_candidate(doc) -> str:
         if not doc.is_password_reused(candidate):
             return candidate
 
-    raise frappe.ValidationError(
-        _("Could not generate an acceptable password for {0}").format(doc.name)
-    )
+    raise frappe.ValidationError(_("Could not generate an acceptable password for {0}").format(doc.name))
 
 
 def _store(doc, field: str, new_password: str):
@@ -441,7 +439,7 @@ def _undo_target_apply(doc, applied: "_Applied", new_password: str, zip_password
             _escalate_desync(
                 doc,
                 applied.description,
-                _("The vault could not be updated, and the hosts could not be put back — {0}").format(e),
+                _("The vault could not be updated, and the hosts could not be put back — {0}").format(str(e)),
                 new_password,
                 zip_password,
             )
@@ -458,7 +456,7 @@ def _undo_target_apply(doc, applied: "_Applied", new_password: str, zip_password
         _escalate_desync(
             doc,
             applied.description,
-            _("The vault could not be updated, and the database could not be put back — {0}").format(e),
+            _("The vault could not be updated, and the database could not be put back — {0}").format(str(e)),
             new_password,
             zip_password,
         )
@@ -471,7 +469,9 @@ def _undo_target_apply(doc, applied: "_Applied", new_password: str, zip_password
     )
 
 
-def _handle_unverified_apply(doc, target, description: str, new_password: str, zip_password: str, reason: str):
+def _handle_unverified_apply(
+    doc, target, description: str, new_password: str, zip_password: str, reason: str
+):
     """The server accepted the change but the account will not authenticate with it.
 
     Recoverable only when a rotation admin is configured, since its own password
@@ -505,11 +505,7 @@ def _escalate_desync(doc, description: str, reason: str, new_password: str, zip_
     """
     _record_target_failure(doc.name, description, f"OUT OF SYNC — {reason}")
 
-    detail = (
-        f"Secret     : {doc.title} ({doc.name})\n"
-        f"Target     : {description}\n"
-        f"What failed: {reason}\n"
-    )
+    detail = f"Secret     : {doc.title} ({doc.name})\nTarget     : {description}\nWhat failed: {reason}\n"
     frappe.log_error(message=detail, title=f"Vault Rotation Left Secret Out Of Sync ({doc.name})")
 
     try:
@@ -590,7 +586,6 @@ def _record_target_failure(secret_name: str, description: str, reason: str):
         frappe.db.commit()  # nosemgrep — this record must outlive the rollback above
     except Exception:
         frappe.log_error(title=f"Vault Rotation Target Status Write Failed ({secret_name})")
-
 
 
 def _rotation_password_length(settings) -> int:
@@ -717,7 +712,7 @@ def _readme(custom_passphrase: bool, target: str | None = None) -> str:
         "The passphrase is the one set specifically for this secret, shared with you\n"
         "by its owner separately — NOT the standing site-wide Vault passphrase."
         if custom_passphrase
-        else "The passphrase is the standing Vault rotation passphrase issued to you\n" "separately."
+        else "The passphrase is the standing Vault rotation passphrase issued to you\nseparately."
     )
     return (
         "Frappe Vault — Automatic Password Rotation\n"
@@ -748,7 +743,7 @@ def _email_body(doc, custom_passphrase: bool, target: str | None = None) -> str:
 
     table = "".join(
         f"<tr><td style='padding:4px 12px 4px 0;color:#666;'>{label}</td>"
-        f"<td style='padding:4px 0;'><strong>{value}</strong></td></tr>"
+        + f"<td style='padding:4px 0;'><strong>{value}</strong></td></tr>"
         for label, value in rows
     )
 
@@ -761,15 +756,15 @@ def _email_body(doc, custom_passphrase: bool, target: str | None = None) -> str:
     if target:
         callout = (
             '<p style="padding:12px;background:#e8f5e9;border-left:3px solid #43a047;">'
-            f'<strong>{_("The database has already been updated.")}</strong><br>'
-            f'{_("Vault and the server are in sync. Update any application, connection string, or config file still using the old password.")}'
+            f"<strong>{_('The database has already been updated.')}</strong><br>"
+            f"{_('Vault and the server are in sync. Update any application, connection string, or config file still using the old password.')}"
             "</p>"
         )
     else:
         callout = (
             '<p style="padding:12px;background:#fff8e1;border-left:3px solid #f5a623;">'
-            f'<strong>{_("This changed the value stored in Vault only.")}</strong><br>'
-            f'{_("The password on the actual server, database, or account has NOT been changed. Apply the new value there yourself, or the two will remain out of sync.")}'
+            f"<strong>{_('This changed the value stored in Vault only.')}</strong><br>"
+            f"{_('The password on the actual server, database, or account has NOT been changed. Apply the new value there yourself, or the two will remain out of sync.')}"
             "</p>"
         )
 

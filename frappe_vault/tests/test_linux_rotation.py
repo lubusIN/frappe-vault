@@ -99,9 +99,7 @@ class TestLinuxTarget(FrappeTestCase):
         self.assertEqual(len(target.hosts), 1)
 
     def test_many_hosts_are_carried_together(self):
-        target = make_target(
-            hosts=[{"hostname": f"vm{i}.example", "ssh_port": 22} for i in range(1, 21)]
-        )
+        target = make_target(hosts=[{"hostname": f"vm{i}.example", "ssh_port": 22} for i in range(1, 21)])
         self.assertEqual(len(target.hosts), 20)
         self.assertIn("+17 more", target.describe())
 
@@ -260,11 +258,7 @@ class TestLinuxTarget(FrappeTestCase):
         report = {
             "stats": {"vm1": {"ok": 1, "failures": 0}, "vm2": {"ok": 0, "failures": 1}},
             "plays": [
-                {
-                    "tasks": [
-                        {"hosts": {"vm2": {"failed": True, "msg": "sudo: a password is required"}}}
-                    ]
-                }
+                {"tasks": [{"hosts": {"vm2": {"failed": True, "msg": "sudo: a password is required"}}}]}
             ],
         }
 

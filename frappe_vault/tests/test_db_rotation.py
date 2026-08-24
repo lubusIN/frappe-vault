@@ -310,9 +310,7 @@ class TestDatabaseRotation(FrappeTestCase):
         self.assertEqual(target.username, "app_user")
 
     def test_target_defaults_the_mongo_auth_source(self):
-        doc = make_db_secret(
-            title="DB Rotation Mongo Secret", database_type=MONGODB, db_auth_source=None
-        )
+        doc = make_db_secret(title="DB Rotation Mongo Secret", database_type=MONGODB, db_auth_source=None)
         target = build_target(doc, "InitialDbPassword123!")
         self.assertEqual(target.auth_source, "admin")
 
@@ -474,9 +472,7 @@ class TestRotationWithoutEmail(FrappeTestCase):
 
         result = rotate_secret(doc.name)
 
-        after = frappe.get_doc("Vault Secret", doc.name).get_password(
-            "db_password", raise_exception=False
-        )
+        after = frappe.get_doc("Vault Secret", doc.name).get_password("db_password", raise_exception=False)
         self.assertNotEqual(before, after)
         self.assertTrue(after)
         self.assertFalse(result["emailed"])

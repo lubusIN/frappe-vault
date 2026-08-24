@@ -257,9 +257,7 @@ def _postgres_connect(target: Target, user: str, password: str):
         )
     except Exception as e:
         frappe.throw(
-            _("Could not connect to PostgreSQL at {0}:{1} — {2}").format(
-                target.host, target.port, _clean(e)
-            ),
+            _("Could not connect to PostgreSQL at {0}:{1} — {2}").format(target.host, target.port, _clean(e)),
             TargetApplyError,
         )
 
@@ -373,9 +371,7 @@ def _mysql_apply(target: Target, new_password: str):
         raise
     except Exception as e:
         frappe.throw(
-            _("MySQL/MariaDB refused the password change for '{0}' — {1}").format(
-                target.username, _clean(e)
-            ),
+            _("MySQL/MariaDB refused the password change for '{0}' — {1}").format(target.username, _clean(e)),
             TargetApplyError,
         )
     finally:
@@ -386,9 +382,7 @@ def _mysql_apply_legacy(cursor, target: Target, new_password: str):
     """Pre-10.2 MariaDB / pre-5.7.6 MySQL fallback."""
     if target.via_admin:
         host_part = _mysql_account_host(cursor, target.username)
-        cursor.execute(
-            "SET PASSWORD FOR %s@%s = PASSWORD(%s)", (target.username, host_part, new_password)
-        )
+        cursor.execute("SET PASSWORD FOR %s@%s = PASSWORD(%s)", (target.username, host_part, new_password))
     else:
         cursor.execute("SET PASSWORD = PASSWORD(%s)", (new_password,))
 

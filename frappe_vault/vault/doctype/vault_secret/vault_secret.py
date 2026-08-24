@@ -268,9 +268,7 @@ class VaultSecret(Document):
 
         if not self.rotating_field:
             frappe.throw(
-                _(
-                    "Automatic rotation is only supported for secrets of type {0} — not '{1}'."
-                ).format(
+                _("Automatic rotation is only supported for secrets of type {0} — not '{1}'.").format(
                     ", ".join(f"'{t}'" for t in sorted(ROTATABLE_FIELD_BY_TYPE)),
                     self.secret_type,
                 )
@@ -305,7 +303,9 @@ class VaultSecret(Document):
         hosts = [r for r in (self.get("linux_hosts") or []) if (r.hostname or "").strip()]
         if not hosts:
             frappe.throw(
-                _("Add at least one host. A Linux rotation has nowhere to apply the new password without one.")
+                _(
+                    "Add at least one host. A Linux rotation has nowhere to apply the new password without one."
+                )
             )
 
         seen = set()
@@ -359,9 +359,9 @@ class VaultSecret(Document):
 
         if self.database_type not in SUPPORTED_DATABASE_TYPES:
             frappe.throw(
-                _("Choose a Database Type ({0}) before enabling 'Apply New Password to the Database'.").format(
-                    ", ".join(SUPPORTED_DATABASE_TYPES)
-                )
+                _(
+                    "Choose a Database Type ({0}) before enabling 'Apply New Password to the Database'."
+                ).format(", ".join(SUPPORTED_DATABASE_TYPES))
             )
 
         if not self.db_host:

@@ -192,9 +192,7 @@ def make_linux_target(
 def build_linux_target(doc) -> LinuxTarget:
     """Resolve a saved Vault Secret into a connectable LinuxTarget."""
     if doc.secret_type != "Linux Server":
-        frappe.throw(
-            _("Only secrets of type 'Linux Server' can be applied to Linux hosts."), LinuxApplyError
-        )
+        frappe.throw(_("Only secrets of type 'Linux Server' can be applied to Linux hosts."), LinuxApplyError)
 
     return make_linux_target(
         username=doc.username,
@@ -452,7 +450,9 @@ def _parse_result(target: LinuxTarget, completed) -> RunResult:
     except json.JSONDecodeError:
         # No parseable output means the run never got as far as contacting hosts
         # — bad inventory, missing collection, unreadable key.
-        reason = _first_line(completed.stderr) or _first_line(completed.stdout) or "Ansible produced no output"
+        reason = (
+            _first_line(completed.stderr) or _first_line(completed.stdout) or "Ansible produced no output"
+        )
         frappe.throw(_("Ansible could not run — {0}").format(reason), LinuxApplyError)
 
     stats = report.get("stats") or {}
