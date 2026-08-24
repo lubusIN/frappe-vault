@@ -225,7 +225,7 @@ def ping(target: LinuxTarget) -> RunResult:
     password is still the true one everywhere, and backs the manual
     "Test Connection" action.
     """
-    return _run(target, _PING_PLAY, extra_vars={})
+    return _run(target, _PING_PLAY, extra_vars={"vault_target_user": target.username})
 
 
 def apply_password(target: LinuxTarget, new_password: str) -> RunResult:
@@ -264,12 +264,17 @@ _PING_PLAY = """
   tasks:
     - name: Reach the host
       ansible.builtin.ping:
-    - name: Confirm privilege escalation works
-      ansible.builtin.command: id -u
+    - name: Confirm privilege escalation works for the account to rotate
+      # passwd -S is read-only — it queries password status, changes nothing
+      # — and is one of the exact commands the setup instructions this app
+      # gives scope `become` access to (usermod, passwd). Checking with
+      # anything else, id -u included, fails on a properly scoped sudoers
+      # rule even though rotation itself would have worked fine: sudo refuses
+      # a command that is not on the rule's list, which is not the same thing
+      # as become being broken.
+      ansible.builtin.command: passwd -S {{ vault_target_user }}
       become: "{{ vault_use_become }}"
       changed_when: false
-      register: vault_id
-      failed_when: vault_use_become and vault_id.stdout != "0"
 """
 
 # `update_password: always` is what makes this idempotent in the sense we need:
