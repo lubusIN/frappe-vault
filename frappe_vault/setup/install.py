@@ -23,6 +23,7 @@ def after_install():
     unpin_home_page()
     add_email_template_custom_fields()
     create_default_email_template()
+    add_custom_docperms()
 
     frappe.db.commit()  # nosemgrep
 
@@ -36,6 +37,7 @@ def after_migrate():
     unpin_home_page()
     add_email_template_custom_fields()
     create_default_email_template()
+    add_custom_docperms()
 
 
 def unpin_home_page():
@@ -254,3 +256,25 @@ def _remove_vault_roles():
                 frappe.delete_doc("Role", role, ignore_permissions=True, force=True)
     except Exception:
         pass
+
+
+def add_custom_docperms():
+    """Grant Vault Admin role necessary permissions to manage standard core doctypes."""
+    doctypes = [
+        {"dt": "Email Account", "perms": {"read": 1, "write": 1, "create": 1, "delete": 1}},
+        {"dt": "Email Template", "perms": {"read": 1, "write": 1, "create": 1, "delete": 1}},
+        {"dt": "Property Setter", "perms": {"read": 1}},
+    ]
+    for d in doctypes:
+        dt = d["dt"]
+        if not frappe.db.exists("Custom DocPerm", {"parent": dt, "role": "Vault Admin"}):
+            frappe.get_doc(
+                {
+                    "doctype": "Custom DocPerm",
+                    "parent": dt,
+                    "parenttype": "DocType",
+                    "parentfield": "permissions",
+                    "role": "Vault Admin",
+                    **d["perms"],
+                }
+            ).insert(ignore_permissions=True)

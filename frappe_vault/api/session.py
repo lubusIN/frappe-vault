@@ -41,6 +41,8 @@ def get_users(include_all: bool = False):
     if not session_roles["is_vault_admin"]:
         include_all = False
 
+    session_user = frappe.session.user
+
     vault_user_names = set(
         frappe.get_all(
             "Has Role",
@@ -50,11 +52,19 @@ def get_users(include_all: bool = False):
             ignore_permissions=True,
         )
     )
-    vault_user_names.add("Administrator")
+    if session_user == "Administrator":
+        vault_user_names.add("Administrator")
 
     user_filters = {"enabled": 1, "name": ["!=", "Guest"]}
+    if session_user != "Administrator":
+        user_filters["name"] = ["not in", ["Guest", "Administrator"]]
+
     if not include_all:
-        user_filters["name"] = ["in", list(vault_user_names)]
+        # If we have specific users to include, but we still need to ensure Guest/Admin are excluded
+        allowed_names = list(vault_user_names)
+        if session_user != "Administrator" and "Administrator" in allowed_names:
+            allowed_names.remove("Administrator")
+        user_filters["name"] = ["in", allowed_names]
 
     users = frappe.get_all(
         "User", fields=USER_FIELDS, order_by="full_name asc", filters=user_filters, ignore_permissions=True
