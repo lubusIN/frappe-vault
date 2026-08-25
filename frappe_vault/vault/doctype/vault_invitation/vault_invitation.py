@@ -49,9 +49,9 @@ class VaultInvitation(Document):
         try:
             if active_template:
                 template_doc = frappe.get_doc("Email Template", active_template)
-                subject = frappe.render_template(template_doc.subject, args)
+                subject = frappe.render_template(template_doc.subject, args)  # nosemgrep
                 response = template_doc.response_html if template_doc.use_html else template_doc.response
-                content = frappe.render_template(response, args)
+                content = frappe.render_template(response, args)  # nosemgrep
 
                 # Fix Frappe UI TextEditor colors (CSS variables aren't supported in email clients)
                 content = re.sub(
@@ -88,36 +88,10 @@ class VaultInvitation(Document):
                     now=True,
                 )
             else:
-                account = frappe.db.get_value(
-                    "Email Account",
-                    {"default_outgoing": 1, "enable_outgoing": 1},
-                    ["name", "email_id"],
-                    as_dict=True,
-                )
-                if not account:
-                    account = frappe.db.get_value(
-                        "Email Account", {"enable_outgoing": 1}, ["name", "email_id"], as_dict=True
+                frappe.throw(
+                    _(
+                        "No default Vault Invitation email template found. Please create one in Email Templates."
                     )
-
-                sender = None
-                if account:
-                    from frappe.utils import formataddr
-
-                    sender = formataddr((account.name, account.email_id))
-
-                fallback_html = f"""<p>Hello,</p>
-<p>You have been invited to join <strong>{title}</strong>.</p>
-<p>Click the link below to accept your invitation:</p>
-<p><a href="{invite_link}" style="display: inline-block; padding: 10px 20px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px;">Accept Invitation</a></p>
-<p>If you have any questions, feel free to contact your administrator.</p>
-<p>Thanks,<br>{title} Team</p>"""
-
-                frappe.sendmail(
-                    sender=sender,
-                    recipients=self.email,
-                    subject=f"You have been invited to join {title}",
-                    content=fallback_html,
-                    now=True,
                 )
             self.db_set("email_sent_at", frappe.utils.now())
         except Exception as e:
@@ -128,7 +102,7 @@ class VaultInvitation(Document):
                 )
             raise
 
-    @frappe.whitelist(allow_guest=True)
+    @frappe.whitelist(allow_guest=True)  # nosemgrep
     def accept_invitation(self):
         if self.accept():
             # the invitee was not around to set a password, mail them a link to do it

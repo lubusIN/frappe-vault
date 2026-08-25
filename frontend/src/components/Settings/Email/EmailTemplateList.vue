@@ -79,12 +79,21 @@
         @saved="onTemplateSaved"
       />
     </template>
+
+    <!-- Confirm Delete Dialog -->
+    <ConfirmDialog
+      v-if="confirmDeleteDialog.show"
+      title="Remove Email Template"
+      message="Are you sure you want to remove this email template?"
+      :onConfirm="confirmDeleteTemplate"
+      :onCancel="() => confirmDeleteDialog.show = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { Button, FeatherIcon, Badge, Dropdown, createListResource, call, toast } from 'frappe-ui'
+import { Button, FeatherIcon, Badge, Dropdown, createListResource, call, toast, ConfirmDialog } from 'frappe-ui'
 import EmailTemplateForm from './EmailTemplateForm.vue'
 
 // list | form
@@ -113,19 +122,20 @@ function onTemplateSaved() {
   templates.reload()
 }
 
-async function deleteTemplate(id) {
-  const confirmed = await new Promise(resolve => {
-    if (window.frappe?.ui?.confirm) {
-      window.frappe.ui.confirm(
-        'Are you sure you want to remove this email template?',
-        () => resolve(true),
-        () => resolve(false)
-      )
-    } else {
-      resolve(window.confirm('Are you sure you want to remove this email template?'))
-    }
-  })
-  if (!confirmed) return
+const confirmDeleteDialog = ref({
+  show: false,
+  templateId: null
+})
+
+function deleteTemplate(id) {
+  confirmDeleteDialog.value = { show: true, templateId: id }
+}
+
+async function confirmDeleteTemplate() {
+  const id = confirmDeleteDialog.value.templateId
+  if (!id) return
+
+  confirmDeleteDialog.value.show = false
 
   try {
     await call('frappe.client.delete', { doctype: 'Email Template', name: id })

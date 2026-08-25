@@ -182,6 +182,8 @@ const pendingInvitations = createListResource({
 })
 
 const usersList = computed(() => {
+  const currentUser = window.frappe?.session?.user || window.frappe?.boot?.user?.name || ''
+
   let filteredUsers = users.data?.vaultUsers || []
   let pendingUsers = (pendingInvitations.data || []).map(inv => ({
     name: inv.name,
@@ -194,6 +196,7 @@ const usersList = computed(() => {
   let allList = [...filteredUsers, ...pendingUsers]
 
   return allList
+    .filter(user => user.name !== currentUser)
     .filter(
       (user) =>
         (user.name || '').toLowerCase().includes(search.value.toLowerCase()) ||

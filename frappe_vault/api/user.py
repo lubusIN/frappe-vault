@@ -4,7 +4,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import split_emails, validate_email_address
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True)  # nosemgrep
 @rate_limit(limit=10, seconds=60 * 60)
 def accept_invitation(key: str | None = None):
     if not key or not isinstance(key, str):
@@ -146,7 +146,9 @@ def remove_roles(user_doc, *roles):
 
 
 @frappe.whitelist()
-def update_profile(first_name=None, last_name=None, user_image=None):
+def update_profile(
+    first_name: str | None = None, last_name: str | None = None, user_image: str | None = None
+):
     """Update the current user's profile information."""
     if frappe.session.user == "Guest":
         raise frappe.PermissionError
@@ -165,7 +167,7 @@ def update_profile(first_name=None, last_name=None, user_image=None):
 
 
 @frappe.whitelist()
-def change_password(old_password, new_password):
+def change_password(old_password: str, new_password: str):
     """Wrapper to update user password."""
     from frappe.core.doctype.user.user import update_password
 

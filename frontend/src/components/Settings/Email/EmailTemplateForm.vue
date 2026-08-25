@@ -29,7 +29,7 @@
     <!-- Form Content -->
     <div class="flex-1 overflow-y-auto px-6 py-6">
       <div class="max-w-3xl flex flex-col gap-8">
-        
+
         <!-- Basic Info -->
         <div class="flex flex-col gap-5">
           <div class="flex gap-4">
@@ -44,7 +44,7 @@
               <p v-if="showValidations && !template.doc.name" class="text-xs text-red-500 mt-1">Name is required</p>
             </div>
           </div>
-          
+
           <div>
             <label class="block text-sm font-medium text-ink-gray-7 mb-1">Subject *</label>
             <TextInput
@@ -55,7 +55,7 @@
             <p v-if="showValidations && !template.doc.subject" class="text-xs text-red-500 mt-1">Subject is required</p>
           </div>
         </div>
-        
+
         <!-- Options -->
         <div class="flex items-center gap-2 mt-2">
           <Checkbox v-model="template.doc.vault_is_default" />
@@ -74,7 +74,7 @@
               ]"
             />
           </div>
-          
+
           <div v-if="contentType === 'Rich Text'">
             <label class="block text-sm font-medium text-ink-gray-7 mb-1">Content *</label>
             <TextEditor
@@ -92,7 +92,7 @@
             ></textarea>
           </div>
         </div>
-        
+
       </div>
     </div>
   </div>
@@ -142,7 +142,7 @@ onMounted(async () => {
     })
     const doc = await docRes.fetch()
     Object.assign(template.doc, doc)
-    
+
     // Set boolean equivalents for UI components
     template.doc.vault_enabled = !!template.doc.vault_enabled
     template.doc.vault_is_default = !!template.doc.vault_is_default
@@ -156,7 +156,7 @@ watch(contentType, (newVal) => {
 
 async function saveTemplate() {
   showValidations.value = true
-  
+
   if (!template.doc.name || !template.doc.subject) {
     toast.error('Please fill in all required fields.')
     return

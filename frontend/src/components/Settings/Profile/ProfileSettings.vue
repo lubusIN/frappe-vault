@@ -4,7 +4,7 @@
       <h2 class="text-xl font-semibold text-ink-gray-9 mb-1">Profile</h2>
       <p class="text-sm text-ink-gray-5">Manage your profile & login information.</p>
     </div>
-    
+
     <div v-if="user.doc" class="flex-1 overflow-y-auto px-4 mt-6">
       <div class="flex items-center justify-between gap-4 pb-8">
         <FileUploader
@@ -79,7 +79,7 @@
         <h3 class="text-base font-semibold text-ink-gray-9 mb-6">
           Account Info & Security
         </h3>
-        
+
         <div class="flex items-center justify-between mb-6">
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium text-ink-gray-8">
@@ -171,7 +171,7 @@ async function save() {
       last_name: user.doc.last_name,
       user_image: user.doc.user_image
     })
-    
+
     // Update originalDoc so it's no longer "dirty"
     user.originalDoc = JSON.parse(JSON.stringify(user.doc))
     editName.value = false

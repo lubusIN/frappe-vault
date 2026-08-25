@@ -78,8 +78,8 @@ const tabs = computed(() => {
         component: markRaw(ProfileSettings),
       },
       {
-        label: 'Preferences',
-        icon: 'lucide-sliders',
+        label: 'Appearance',
+        icon: 'lucide-palette',
         component: markRaw(PreferencesSettings),
       }
     ]

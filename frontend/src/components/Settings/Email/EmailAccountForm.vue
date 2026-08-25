@@ -15,7 +15,7 @@
             class="flex flex-col items-center gap-1 w-[70px] cursor-pointer"
             @click="selectProvider(prov.name)"
           >
-            <div 
+            <div
               class="flex items-center justify-center w-8 h-8 bg-surface-gray-2 rounded-xl transition-all hover:bg-surface-gray-3"
               :class="{ 'ring-2 ring-outline-gray-4': account.doc?.service === prov.name }"
             >
@@ -98,7 +98,7 @@
               v-model="account.doc.enable_incoming"
             />
             <div class="text-xs text-ink-gray-5 leading-relaxed -mt-3 ml-6">If enabled, emails will be pulled from this account.</div>
-            
+
             <FormControl
               type="checkbox"
               label="Default Incoming"
@@ -127,7 +127,7 @@
           </div>
         </div>
         </div>
-        
+
         <!-- Action Buttons -->
         <div class="flex items-center justify-between mt-10">
           <Button
@@ -233,7 +233,7 @@ function selectProvider(name) {
 
 function validateFields() {
   if (!showValidations.value) return true
-  
+
   let isValid = true
   validationErrors.email_account_name = ''
   validationErrors.email_id = ''
@@ -326,7 +326,7 @@ async function saveAccount() {
   if (!validateFields()) {
     return
   }
-  
+
   isSaving.value = true
   try {
     const serviceConfig = emailServiceConfig[account.doc.service] || {}
@@ -354,7 +354,7 @@ async function saveAccount() {
       })
       await renameRes.fetch()
       docToSave.name = account.doc.email_account_name
-      
+
       const getRes = createResource({
         url: 'frappe.client.get',
         makeParams() {

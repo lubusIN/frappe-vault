@@ -14,7 +14,6 @@
 
         <div class="flex flex-col gap-4">
           <FormControl
-            v-if="userOptions.length > 0"
             type="multiselect"
             :label="`Users (${userOptions.length})`"
             v-model="selectedUser"
@@ -35,17 +34,6 @@
               </div>
             </template>
           </FormControl>
-          
-          <div v-else class="flex flex-col gap-1.5">
-            <label class="block text-xs text-ink-gray-5">Users (0)</label>
-            <div class="flex flex-col items-center justify-center p-6 border border-dashed border-outline-gray-3 rounded-lg bg-surface-gray-1">
-              <FeatherIcon name="users" class="w-8 h-8 text-ink-gray-4 mb-2" />
-              <p class="text-sm font-medium text-ink-gray-8">No Users Found</p>
-              <p class="text-xs text-ink-gray-5 text-center mt-1">
-                There are no more system users available to add, or all users have already been added to this Vault.
-              </p>
-            </div>
-          </div>
 
           <FormControl
             v-model="selectedRole"

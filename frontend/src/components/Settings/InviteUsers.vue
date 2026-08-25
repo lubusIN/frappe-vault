@@ -175,11 +175,11 @@ const inviteByEmail = createResource({
     if (data.to_invite && data.to_invite.length > 0) {
       toast.success('Invitations sent successfully!')
     }
-    
+
     if (data.existing_members && data.existing_members.length > 0) {
       toast.error(`User(s) already exist: ${data.existing_members.join(', ')}. Please manage their roles from the Existing Users tab.`)
     }
-    
+
     if (data.existing_invites && data.existing_invites.length > 0) {
       toast.info(`Invitations already pending for: ${data.existing_invites.join(', ')}`)
     }

@@ -78,12 +78,21 @@
         @saved="onAccountSaved"
       />
     </template>
+
+    <!-- Confirm Delete Dialog -->
+    <ConfirmDialog
+      v-if="confirmDeleteDialog.show"
+      title="Remove Email Account"
+      message="Are you sure you want to remove this email account?"
+      :onConfirm="confirmDeleteAccount"
+      :onCancel="() => confirmDeleteDialog.show = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { Button, FeatherIcon, Badge, Dropdown, createListResource, call, toast } from 'frappe-ui'
+import { Button, FeatherIcon, Badge, Dropdown, createListResource, call, toast, ConfirmDialog } from 'frappe-ui'
 import EmailAccountForm from './EmailAccountForm.vue'
 
 // list | providers | form
@@ -112,19 +121,20 @@ function onAccountSaved() {
   currentView.value = 'list'
 }
 
-async function deleteAccount(name) {
-  const confirmed = await new Promise(resolve => {
-    if (window.frappe?.ui?.confirm) {
-      window.frappe.ui.confirm(
-        'Are you sure you want to remove this email account?',
-        () => resolve(true),
-        () => resolve(false)
-      )
-    } else {
-      resolve(window.confirm('Are you sure you want to remove this email account?'))
-    }
-  })
-  if (!confirmed) return
+const confirmDeleteDialog = ref({
+  show: false,
+  accountName: null
+})
+
+function deleteAccount(name) {
+  confirmDeleteDialog.value = { show: true, accountName: name }
+}
+
+async function confirmDeleteAccount() {
+  const name = confirmDeleteDialog.value.accountName
+  if (!name) return
+
+  confirmDeleteDialog.value.show = false
 
   try {
     await call('frappe.client.delete', { doctype: 'Email Account', name })

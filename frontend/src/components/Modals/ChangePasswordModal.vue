@@ -102,14 +102,14 @@ const isValid = computed(() => {
 async function savePassword() {
   showValidation.value = true
   if (!isValid.value) return
-  
+
   loading.value = true
   try {
     const res = await call('frappe_vault.api.user.change_password', {
       new_password: newPassword.value,
       old_password: oldPassword.value,
     })
-    
+
     if (res.message || res) {
       toast.success('Password changed successfully')
       isOpen.value = false
