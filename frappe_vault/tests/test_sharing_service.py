@@ -55,7 +55,19 @@ class TestSharingService(FrappeTestCase):
             },
         )
         frappe.db.delete(
-            "Vault Folder", {"folder_name": ["in", ["Test Shared Folder", "Non Cascade Test Folder"]]}
+            "Vault Folder",
+            {
+                "folder_name": [
+                    "in",
+                    [
+                        "Test Shared Folder",
+                        "Non Cascade Test Folder",
+                        "Nested Test Parent",
+                        "Nested Test Inner",
+                        "User A Folder",
+                    ],
+                ]
+            },
         )
         frappe.db.delete("Vault Share", {"shared_by": "test_shared_1@example.com"})
 
@@ -581,3 +593,113 @@ class TestSharingService(FrappeTestCase):
         user_group_item = next((s for s in shares_ui if s.get("share_type") == "UserGroup"), None)
         self.assertIsNotNone(user_group_item)
         self.assertEqual(user_group_item.get("user_count"), 2)
+
+    def test_nested_folder_sharing_flow(self):
+        """Test full lifecycle of nested folder sharing, resharing, and revocation."""
+        from frappe_vault.api.folders import create as create_folder
+        from frappe_vault.services.secret_service import create_secret
+        from frappe_vault.services.sharing_service import share_secret, unshare, update_share_permission
+        from frappe_vault.utils.permissions import has_folder_permission, has_secret_permission
+
+        # 1. Admin Setup
+        frappe.set_user("Administrator")
+        frappe.db.delete("Vault Secret", {"title": ["in", ["Nested Test Secret", "User A Secret"]]})
+        frappe.db.delete(
+            "Vault Folder",
+            {"folder_name": ["in", ["Nested Test Parent", "Nested Test Inner", "User A Folder"]]},
+        )
+        frappe.db.commit()
+
+        parent_folder_res = create_folder(folder_name="Nested Test Parent", color="Blue", icon="folder")
+        parent_folder = parent_folder_res.get("name")
+
+        nested_folder_res = create_folder(
+            folder_name="Nested Test Inner", color="Blue", icon="folder", parent_vault_folder=parent_folder
+        )
+        nested_folder = nested_folder_res.get("name")
+
+        secret = create_secret(
+            {
+                "title": "Nested Test Secret",
+                "secret_type": "Password",
+                "password": "pass",
+                "folder": nested_folder,
+            }
+        )
+        secret_name = secret.get("name")
+
+        # 2. Admin Share with User A (Full Control)
+        admin_share_res = share_secret(
+            shared_name=parent_folder,
+            shared_doctype="Vault Folder",
+            share_type="User",
+            user="test_shared_1@example.com",
+            permission_level="Full Control",
+        )
+
+        # 3. Verify User A Access
+        frappe.set_user("test_shared_1@example.com")
+        self.assertTrue(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
+        self.assertTrue(has_folder_permission(nested_folder, "read", "test_shared_1@example.com"))
+        self.assertTrue(has_secret_permission(secret_name, "read", "test_shared_1@example.com"))
+        self.assertTrue(has_secret_permission(secret_name, "share", "test_shared_1@example.com"))
+
+        # 4. User A Reshares: Creates folder and shares with User B
+        user_a_folder_res = create_folder(
+            folder_name="User A Folder", color="Red", icon="folder", parent_vault_folder=nested_folder
+        )
+        user_a_folder = user_a_folder_res.get("name")
+
+        user_a_secret = create_secret(
+            {
+                "title": "User A Secret",
+                "secret_type": "Password",
+                "password": "pass",
+                "folder": user_a_folder,
+            }
+        )
+        user_a_secret_name = user_a_secret.get("name")
+
+        share_secret(
+            shared_name=user_a_folder,
+            shared_doctype="Vault Folder",
+            share_type="User",
+            user="test_shared_2@example.com",
+            permission_level="View Only",
+        )
+
+        # 5. Verify User B Access
+        frappe.set_user("test_shared_2@example.com")
+        self.assertTrue(has_folder_permission(user_a_folder, "read", "test_shared_2@example.com"))
+        self.assertTrue(has_secret_permission(user_a_secret_name, "read", "test_shared_2@example.com"))
+        self.assertFalse(has_folder_permission(nested_folder, "read", "test_shared_2@example.com"))
+        self.assertFalse(has_secret_permission(secret_name, "read", "test_shared_2@example.com"))
+
+        # 6. Admin downgrades User A
+        frappe.set_user("Administrator")
+        update_share_permission(admin_share_res.get("name"), "View Only")
+
+        # 7. Verify Downgrade
+        frappe.set_user("test_shared_1@example.com")
+        self.assertTrue(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
+        self.assertFalse(has_folder_permission(parent_folder, "write", "test_shared_1@example.com"))
+        self.assertFalse(has_secret_permission(secret_name, "share", "test_shared_1@example.com"))
+
+        # 8. Revocation
+        frappe.set_user("Administrator")
+        unshare(admin_share_res.get("name"))
+
+        # 9. Verify Revocation
+        frappe.set_user("test_shared_1@example.com")
+        self.assertFalse(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
+        self.assertFalse(has_folder_permission(nested_folder, "read", "test_shared_1@example.com"))
+        self.assertFalse(has_secret_permission(secret_name, "read", "test_shared_1@example.com"))
+
+        # Cleanup
+        frappe.set_user("Administrator")
+        frappe.db.delete("Vault Secret", {"name": ["in", [secret_name, user_a_secret_name]]})
+        frappe.db.delete("Vault Folder", {"name": ["in", [user_a_folder, nested_folder, parent_folder]]})
+        frappe.db.delete(
+            "Vault Share", {"shared_name": ["in", [user_a_folder, nested_folder, parent_folder]]}
+        )
+        frappe.db.commit()

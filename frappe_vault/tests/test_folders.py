@@ -57,3 +57,36 @@ class TestFolders(FrappeTestCase):
         self.assertEqual(result["deleted"], folder_name)
         self.assertFalse(frappe.db.exists("Vault Folder", folder_name))
         self.assertFalse(frappe.db.exists("Vault Secret", secret_name))
+
+    def test_delete_nested_folders_move_up(self):
+        from frappe_vault.api.folders import delete as delete_folder
+
+        parent = create("Test Parent", icon="folder")
+        child = create("Test Child", icon="folder", parent_vault_folder=parent["name"])
+
+        # Delete Parent, move child up
+        delete_folder(parent["name"], subfolder_action="move_up")
+
+        self.assertFalse(frappe.db.exists("Vault Folder", parent["name"]))
+
+        # Child should now have no parent
+        child_doc = frappe.get_doc("Vault Folder", child["name"])
+        self.assertIsNone(child_doc.parent_vault_folder)
+
+        frappe.delete_doc("Vault Folder", child["name"])
+
+    def test_delete_nested_folders_delete_all(self):
+        from frappe_vault.api.folders import delete as delete_folder
+        from frappe_vault.api.secrets import create as create_secret
+
+        parent = create("Test Parent", icon="folder")
+        child = create("Test Child", icon="folder", parent_vault_folder=parent["name"])
+
+        secret = create_secret(title="Child Secret", folder=child["name"], password="Password123!")
+
+        # Delete Parent, and all children
+        delete_folder(parent["name"], subfolder_action="delete_all", delete_secrets=True)
+
+        self.assertFalse(frappe.db.exists("Vault Folder", parent["name"]))
+        self.assertFalse(frappe.db.exists("Vault Folder", child["name"]))
+        self.assertFalse(frappe.db.exists("Vault Secret", secret["name"]))
