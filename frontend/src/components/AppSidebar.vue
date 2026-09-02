@@ -14,7 +14,7 @@
           :menu-items="sidebarConfig.header.menuItems"
         />
 
-        <div class="flex-1 overflow-y-auto overflow-x-hidden">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden px-2 -mx-2">
           <!-- Main Links Section -->
           <nav class="flex flex-col gap-0.5 mt-2">
             <SidebarItem
@@ -27,7 +27,10 @@
               :onClick="item.onClick"
               :isActive="item.isActive"
               class="vault-sidebar-item cursor-pointer"
-              :class="{ 'notifications-btn-trigger': item.isNotification }"
+              :class="[
+                { 'notifications-btn-trigger': item.isNotification },
+                item.isActive ? '!bg-surface-elevation-3 !text-ink-gray-8 !shadow-sm' : ''
+              ]"
             >
               <template v-if="item.count" #suffix>
                 <Badge :label="String(item.count)" variant="subtle" :theme="item.isNotification && item.count > 0 ? 'red' : 'gray'" />
@@ -60,37 +63,114 @@
               </Tooltip>
             </div>
 
-          <SidebarItem
-            v-for="folder in folders"
-            :key="folder.name"
-            :label="folder.folder_name"
-            :to="`/secrets?folder=${encodeURIComponent(folder.name)}`"
-            :isActive="checkActive(`/secrets?folder=${encodeURIComponent(folder.name)}`)"
-            class="group vault-sidebar-item"
-          >
-            <template #prefix>
-              <div class="flex items-center justify-center w-4 h-4">
+          <div v-show="!isSidebarCollapsed" class="w-full flex-1"><Tree v-if="folderTree.length" :nodes="folderTree" node-key="name" class="w-full">
+            <template #item="{ node, expanded, toggle, hasChildren }">
+              <router-link
+                :to="`/secrets?folder=${encodeURIComponent(node.name)}`"
+                class="flex h-7 min-w-0 flex-1 items-center rounded pl-0.5 pr-1.5 transition-colors focus:outline-none focus-visible:ring-0"
+                :class="
+                  checkActive(`/secrets?folder=${encodeURIComponent(node.name)}`)
+                    ? 'bg-surface-elevation-3 text-ink-gray-8 shadow-sm'
+                    : 'text-ink-gray-6 hover:bg-surface-gray-2'
+                "
+              >
+                <!-- Prefix Icon -->
                 <Icon
-                  :name="folder.icon || 'folder'"
-                  class="w-4 h-4 shrink-0"
+                  :name="node.icon || 'folder'"
+                  class="size-4 shrink-0 mr-2 text-ink-gray-5"
                 />
-              </div>
+
+                <!-- Label -->
+                <span class="truncate text-[13px] flex-1">{{ node.label }}</span>
+
+                <!-- Suffix Actions (Arrow on right!) -->
+                <div class="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity ml-auto" @click.prevent.stop>
+                  <!-- Dropdown for options -->
+                  <Dropdown v-if="getFolderOptions(node).length > 0" :options="getFolderOptions(node)">
+                    <template #default="{ open }">
+                      <Button
+                        variant="ghost"
+                        icon="lucide-more-horizontal"
+                        class="size-5 !p-0.5 text-ink-gray-6"
+                        :class="{ 'bg-surface-gray-3': open }"
+                      />
+                    </template>
+                  </Dropdown>
+                  <!-- Expand/Collapse toggle -->
+                  <Button
+                    v-if="hasChildren"
+                    variant="ghost"
+                    :icon="expanded ? 'chevron-down' : 'chevron-right'"
+                    class="size-5 !p-0.5 text-ink-gray-5"
+                    @click.prevent.stop="toggle"
+                  />
+                </div>
+              </router-link>
             </template>
-            <template #suffix>
-              <div v-if="getFolderOptions(folder).length > 0" class="opacity-0 group-hover:opacity-100 transition-opacity duration-150" @click.prevent.stop>
-                <Dropdown :options="getFolderOptions(folder)">
-                  <template #default="{ open }">
-                    <Button
-                      variant="ghost"
-                      icon="lucide-more-horizontal"
-                      class="!p-0.5 h-auto text-ink-gray-6"
-                      :class="{ 'bg-surface-gray-3': open }"
+          </Tree>
+          <div v-else class="px-2 py-1.5 text-xs text-ink-gray-5">
+            No folders yet.
+          </div></div>
+
+          <div v-show="isSidebarCollapsed" class="flex flex-col gap-0.5 w-full">
+            <template v-for="folder in folderTree" :key="folder.name">
+              <Popover v-if="folder.children && folder.children.length > 0" trigger="hover" placement="right-start">
+                <template #target>
+                  <SidebarItem
+                    :label="folder.folder_name"
+                    :to="`/secrets?folder=${encodeURIComponent(folder.name)}`"
+                    :isActive="isFolderOrDescendantActive(folder)"
+                    class="vault-sidebar-item cursor-pointer"
+                  >
+                    <template #prefix>
+                      <div class="flex items-center justify-center w-4 h-4 shrink-0">
+                        <Icon
+                          :name="folder.icon || 'folder'"
+                          class="w-4 h-4 shrink-0 text-ink-gray-5"
+                        />
+                      </div>
+                    </template>
+                  </SidebarItem>
+                </template>
+                <template #body>
+                  <div class="bg-surface-gray-1 border border-outline-gray-2 shadow-xl rounded-lg py-1.5 w-56 ml-2 z-50">
+                    <div class="px-3 py-1.5 text-[11px] font-semibold text-ink-gray-4 uppercase tracking-wider mb-1">
+                      {{ folder.folder_name }}
+                    </div>
+                    <div class="max-h-[300px] overflow-y-auto">
+                      <router-link
+                        v-for="child in getAllDescendants(folder)"
+                        :key="child.name"
+                        :to="`/secrets?folder=${encodeURIComponent(child.name)}`"
+                        class="flex items-center px-3 py-1.5 text-[13px] hover:bg-surface-gray-2 text-ink-gray-7 hover:text-ink-gray-9 transition-colors cursor-pointer"
+                        :class="{ 'font-semibold text-ink-gray-9 bg-surface-gray-2': checkActive(`/secrets?folder=${encodeURIComponent(child.name)}`) }"
+                        :style="{ paddingLeft: `${12 + (child.level * 16)}px` }"
+                      >
+                        <Icon :name="child.icon || 'folder'" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" />
+                        <span class="truncate">{{ child.folder_name }}</span>
+                      </router-link>
+                    </div>
+                  </div>
+                </template>
+              </Popover>
+              <SidebarItem
+                v-else
+                :label="folder.folder_name"
+                :to="`/secrets?folder=${encodeURIComponent(folder.name)}`"
+                :isActive="isFolderOrDescendantActive(folder)"
+                class="vault-sidebar-item cursor-pointer"
+              >
+                <template #prefix>
+                  <div class="flex items-center justify-center w-4 h-4 shrink-0">
+                    <Icon
+                      :name="folder.icon || 'folder'"
+                      class="w-4 h-4 shrink-0 text-ink-gray-5"
                     />
-                  </template>
-                </Dropdown>
-              </div>
+                  </div>
+                </template>
+              </SidebarItem>
             </template>
-          </SidebarItem>
+          </div>
         </div>
       </div>
 
@@ -212,6 +292,22 @@
               @keyup.enter="handleCreateFolder"
             />
             <div>
+              <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Parent Folder (Optional)</label>
+              <Autocomplete
+                v-model="newFolderParent"
+                :options="folderOptions"
+                placeholder="Select parent folder..."
+                :disabled="isSubfolderMode"
+              >
+                <template #item-prefix="{ option }">
+                  <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
+                    <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
+                    <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
+                  </div>
+                </template>
+              </Autocomplete>
+            </div>
+            <div>
               <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Folder Icon</label>
               <IconPicker v-model="newFolderIcon" placeholder="Search icons..." class="w-full" />
             </div>
@@ -244,6 +340,21 @@
               placeholder="e.g. Work, Personal"
               @keyup.enter="handleEditFolder"
             />
+            <div>
+              <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Parent Folder (Optional)</label>
+              <Autocomplete
+                v-model="editFolderParent"
+                :options="folderOptions.filter(o => o.value !== folderToEdit?.name)"
+                placeholder="Select parent folder..."
+              >
+                <template #item-prefix="{ option }">
+                  <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
+                    <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
+                    <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
+                  </div>
+                </template>
+              </Autocomplete>
+            </div>
             <div>
               <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Folder Icon</label>
               <IconPicker v-model="editFolderIcon" placeholder="Search icons..." class="w-full" />
@@ -290,6 +401,37 @@
                   Are you sure you want to delete folder <span class="font-semibold text-ink-gray-9">"{{ folderToDelete?.folder_name }}"</span>?
                 </p>
               </div>
+
+              <!-- Subfolder Actions -->
+              <div class="space-y-3 mt-4" v-if="folderToDelete?.children?.length > 0">
+                <p class="text-sm font-medium text-ink-gray-9">What to do with subfolders?</p>
+                <FormControl
+                  type="select"
+                  v-model="deleteSubfolderAction"
+                  :options="[
+                    { label: folderToDelete.parent_vault_folder ? 'Move to Parent Level' : 'Move to Root Level', value: 'move_up' },
+                    { label: 'Move to specific folder...', value: 'move_to' },
+                    { label: 'Delete all subfolders', value: 'delete_all' }
+                  ]"
+                />
+
+                <div v-if="deleteSubfolderAction === 'move_to'" class="mt-2">
+                  <Autocomplete
+                    v-model="deleteTargetFolder"
+                    :options="folderOptions.filter(o => o.value !== folderToDelete?.name && !o.value.startsWith(folderToDelete?.name))"
+                    placeholder="Select target folder..."
+                    class="w-full text-sm cursor-pointer"
+                  >
+                    <template #item-prefix="{ option }">
+                      <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
+                        <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
+                        <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
+                        <div class="w-4 h-4 mr-2 shrink-0" v-else></div>
+                      </div>
+                    </template>
+                  </Autocomplete>
+                </div>
+              </div>
               <div v-if="deleteFolderError" class="text-sm text-red-700 dark:text-red-300 bg-surface-red-1/40 p-2.5 rounded-lg border border-outline-red-1 font-medium leading-relaxed">
                 {{ deleteFolderError }}
               </div>
@@ -333,9 +475,9 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, h } from 'vue'
+import { ref, computed, reactive, h, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Badge, Button, FeatherIcon, Tooltip, Dialog, Dropdown, FormControl, Checkbox, Sidebar, SidebarItem, SidebarHeader, SidebarCollapseToggle, createResource, toast } from 'frappe-ui'
+import { Badge, Button, FeatherIcon, Tooltip, Dialog, Dropdown, FormControl, Checkbox, Sidebar, SidebarItem, Tree, Autocomplete, SidebarHeader, SidebarCollapseToggle, createResource, toast, Popover } from 'frappe-ui'
 import { IconPicker, Icon } from 'frappe-ui/icons'
 import { useVaultStats, useFolders, useCreateFolder, useDeleteFolder, useUpdateFolder, useFolderSecrets, useGenerateDemoData, useClearDemoData, mobileSidebarOpened, isSidebarCollapsed } from '../composables/vault'
 import {
@@ -423,6 +565,8 @@ const deleteSecretsCount = ref(0)
 const deleteSecretsCheck = ref(false)
 const loadingCount = ref(false)
 const deleteFolderError = ref('')
+const deleteSubfolderAction = ref('move_up')
+const deleteTargetFolder = ref(null)
 
 const showShareFolderDialog = ref(false)
 const folderToShare = ref(null)
@@ -449,9 +593,29 @@ function parseFrappeError(error) {
 }
 
 
-function openCreateFolderDialog() {
+const newFolderParent = ref(null)
+const isSubfolderMode = ref(false)
+const editFolderParent = ref(null)
+
+const folderOptions = computed(() => {
+  const options = []
+  const traverse = (nodes, level = 0) => {
+    for (const node of nodes) {
+      options.push({ label: node.folder_name, value: node.name, level })
+      if (node.children?.length) {
+        traverse(node.children, level + 1)
+      }
+    }
+  }
+  traverse(folderTree.value)
+  return options
+})
+
+function openCreateFolderDialog(parent = null) {
   newFolderName.value = ''
   newFolderIcon.value = ''
+  newFolderParent.value = parent ? { label: parent.folder_name, value: parent.name } : null
+  isSubfolderMode.value = !!parent
   showCreateFolderDialog.value = true
 }
 
@@ -461,12 +625,36 @@ async function handleCreateFolder() {
     await createFolderResource.submit({
       folder_name: newFolderName.value.trim(),
       icon: newFolderIcon.value || 'folder',
+      parent_vault_folder: newFolderParent.value?.value || null,
+      is_group: 0
     })
     showCreateFolderDialog.value = false
     foldersResource.reload()
     stats.reload()
   } catch (err) {
   }
+}
+
+
+function isFolderOrDescendantActive(folder) {
+  if (checkActive(`/secrets?folder=${encodeURIComponent(folder.name)}`)) return true
+  if (folder.children) {
+    for (const child of folder.children) {
+      if (isFolderOrDescendantActive(child)) return true
+    }
+  }
+  return false
+}
+
+function getAllDescendants(folder, level = 0) {
+  let descendants = []
+  if (folder.children) {
+    folder.children.forEach(child => {
+      descendants.push({ ...child, level })
+      descendants = descendants.concat(getAllDescendants(child, level + 1))
+    })
+  }
+  return descendants
 }
 
 function getFolderOptions(folder) {
@@ -496,12 +684,19 @@ function getFolderOptions(folder) {
 
   if (folder.can_write) {
     options.push({
+      label: 'New Subfolder',
+      icon: 'plus',
+      onClick: () => openCreateFolderDialog(folder)
+    })
+    options.push({
       label: 'Edit Folder',
       icon: 'edit-2',
       onClick: () => {
         folderToEdit.value = folder
         editFolderName.value = folder.folder_name
         editFolderIcon.value = folder.icon || ''
+        const parentOpt = folderOptions.value.find(o => o.value === folder.parent_vault_folder)
+        editFolderParent.value = parentOpt || null
         showEditFolderDialog.value = true
       }
     })
@@ -516,10 +711,12 @@ function getFolderOptions(folder) {
 
 function openDeleteFolderDialog(folder) {
   folderToDelete.value = folder
-  deleteSecretsCount.value = 0
-  deleteSecretsCheck.value = false
-  loadingCount.value = true
+  deleteSecretsCheck.value = true
   deleteFolderError.value = ''
+  deleteSecretsCount.value = 0
+  loadingCount.value = true
+  deleteSubfolderAction.value = 'move_up'
+  deleteTargetFolder.value = null
   showDeleteFolderDialog.value = true
 
   folderSecretsResource.submit({ folder_name: folder.name }).then((res) => {
@@ -537,6 +734,7 @@ async function handleEditFolder() {
       name: folderToEdit.value.name,
       folder_name: editFolderName.value.trim(),
       icon: editFolderIcon.value || 'folder',
+      parent_vault_folder: editFolderParent.value?.value || null,
     })
     showEditFolderDialog.value = false
     folderToEdit.value = null
@@ -552,6 +750,8 @@ async function handleDeleteFolder() {
     await deleteFolderResource.submit({
       name: folderToDelete.value.name,
       delete_secrets: deleteSecretsCount.value > 0 && deleteSecretsCheck.value ? 1 : 0,
+      subfolder_action: deleteSubfolderAction.value,
+      target_folder: deleteTargetFolder.value?.value || null,
     })
 
     if (route.query.folder === folderToDelete.value.name || route.name === 'SecretDetail') {
@@ -622,6 +822,46 @@ const aboutLinks = [
 ]
 
 const folders = computed(() => foldersResource.data || [])
+
+const folderTree = ref([])
+
+watch(
+  () => foldersResource.data,
+  (allFolders) => {
+    const newTree = []
+    const map = {}
+
+    const preserveMap = {}
+    const scan = (nodes) => {
+      for (const n of nodes) {
+        preserveMap[n.name] = n.expanded
+        if (n.children) scan(n.children)
+      }
+    }
+    scan(folderTree.value)
+
+    if (allFolders) {
+      allFolders.forEach(f => {
+        map[f.name] = {
+          ...f,
+          label: f.folder_name,
+          children: [],
+          expanded: preserveMap[f.name] !== undefined ? preserveMap[f.name] : true
+        }
+      })
+
+      allFolders.forEach(f => {
+        if (f.parent_vault_folder && map[f.parent_vault_folder]) {
+          map[f.parent_vault_folder].children.push(map[f.name])
+        } else {
+          newTree.push(map[f.name])
+        }
+      })
+    }
+    folderTree.value = newTree
+  },
+  { immediate: true }
+)
 
 const userName = computed(() => {
   if (window.frappe?.boot?.user) {

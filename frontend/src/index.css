@@ -81,3 +81,13 @@
 [data-reka-popper-content-wrapper] {
   z-index: 100 !important;
 }
+
+/* Fix IconPicker icons in dark mode */
+[data-theme="dark"] [data-reka-popper-content-wrapper] button svg,
+[data-theme="dark"] [data-headlessui-state="open"] button svg {
+  color: var(--text-ink-gray-3, #d1d5db) !important;
+}
+[data-theme="dark"] [data-reka-popper-content-wrapper] button:hover svg,
+[data-theme="dark"] [data-headlessui-state="open"] button:hover svg {
+  color: white !important;
+}

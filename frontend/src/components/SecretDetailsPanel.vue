@@ -27,7 +27,20 @@
         <div class="flex items-center justify-between gap-3 text-sm">
           <label class="w-28 shrink-0 text-ink-gray-5 font-normal">Folder</label>
           <div class="flex-1 min-w-0">
-            <FormControl v-model="editForm.folder" type="select" :options="folderOptions" class="w-full text-sm cursor-pointer" />
+            <Autocomplete
+              v-model="selectedFolder"
+              :options="folderOptions"
+              placeholder="Select a folder..."
+              class="w-full text-sm cursor-pointer"
+            >
+              <template #item-prefix="{ option }">
+                <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
+                  <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
+                  <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
+                  <div class="w-4 h-4 mr-2 shrink-0" v-else></div>
+                </div>
+              </template>
+            </Autocomplete>
           </div>
         </div>
 
@@ -285,7 +298,9 @@ import {
   FormControl,
   Dialog,
   toast,
+  Autocomplete
 } from 'frappe-ui'
+import { Icon } from 'frappe-ui/icons'
 
 import { useClipboard } from '../composables/clipboard'
 import {
@@ -317,15 +332,50 @@ const clipboard = useClipboard()
 folders.submit()
 
 const folderOptions = computed(() => {
-  const options = [{ label: 'No Folder', value: '' }]
-  if (folders.data) {
-    folders.data.forEach(f => {
-      if (f.can_write || f.name === props.secretData?.folder) {
-        options.push({ label: f.folder_name, value: f.name })
+  const opts = [{ label: 'No Folder', value: '', level: 0 }]
+  const foldersData = folders.data || []
+
+  const tree = []
+  const map = {}
+  foldersData.forEach(f => {
+    map[f.name] = { ...f, children: [] }
+  })
+
+  foldersData.forEach(f => {
+    if (f.parent_vault_folder && map[f.parent_vault_folder]) {
+      map[f.parent_vault_folder].children.push(map[f.name])
+    } else {
+      tree.push(map[f.name])
+    }
+  })
+
+  const traverse = (nodes, level = 0) => {
+    for (const node of nodes) {
+      if (node.can_write || node.name === props.secretData?.folder) {
+        opts.push({ label: node.folder_name, value: node.name, level })
       }
-    })
+      if (node.children?.length) {
+        traverse(node.children, level + 1)
+      }
+    }
   }
-  return options
+
+  traverse(tree)
+  return opts
+})
+
+const selectedFolder = ref(null)
+
+watch(() => editForm.folder, (newFolder) => {
+  if (typeof newFolder === 'string') {
+    selectedFolder.value = folderOptions.value.find(o => o.value === newFolder) || { label: 'No Folder', value: '', level: 0 }
+  }
+})
+
+watch(selectedFolder, (newVal) => {
+  if (newVal) {
+    editForm.folder = newVal.value
+  }
 })
 
 function getFolderName(folderId) {
@@ -458,6 +508,7 @@ async function toggleEditMode() {
     editForm.title = sd.title || ''
     editForm.secret_type = sd.secret_type || 'Password'
     editForm.folder = sd.folder || ''
+    selectedFolder.value = folderOptions.value.find(o => o.value === editForm.folder) || { label: 'No Folder', value: '', level: 0 }
     editForm.url = sd.url || ''
     editForm.username = sd.username || ''
     editForm.email = sd.email || ''
