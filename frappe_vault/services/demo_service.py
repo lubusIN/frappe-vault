@@ -147,15 +147,24 @@ def clear_demo_data() -> dict:
         folder_names.add(f["folder_name"])
 
     # Delete demo folders if empty along with their shares
-    for f_name in folder_names:
-        if frappe.db.exists("Vault Folder", f_name):
-            for sh in frappe.get_all(
-                "Vault Share", filters={"shared_doctype": "Vault Folder", "shared_name": f_name}, pluck="name"
-            ):
-                frappe.delete_doc("Vault Share", sh, ignore_permissions=True, force=True)
-            remaining = frappe.get_all("Vault Secret", filters={"folder": f_name})
-            if not remaining:
-                frappe.delete_doc("Vault Folder", f_name, ignore_permissions=True, force=True)
+    sorted_folders = frappe.get_all(
+        "Vault Folder", filters={"name": ["in", list(folder_names)]}, order_by="lft desc", pluck="name"
+    )
+    for f_name in sorted_folders:
+        for sh in frappe.get_all(
+            "Vault Share", filters={"shared_doctype": "Vault Folder", "shared_name": f_name}, pluck="name"
+        ):
+            frappe.delete_doc("Vault Share", sh, ignore_permissions=True, force=True)
+        remaining_secrets = frappe.get_all("Vault Secret", filters={"folder": f_name})
+        if not remaining_secrets:
+            # Move any manual subfolders to root before deleting the demo parent
+            children = frappe.get_all("Vault Folder", filters={"parent_vault_folder": f_name}, pluck="name")
+            for child in children:
+                frappe.db.set_value("Vault Folder", child, "parent_vault_folder", None)
+                c_doc = frappe.get_doc("Vault Folder", child)
+                c_doc.save(ignore_permissions=True)
+
+            frappe.delete_doc("Vault Folder", f_name, ignore_permissions=True, force=True)
 
     # Final cleanup: scrub any orphan share records pointing to deleted records
     for sh in frappe.get_all("Vault Share", fields=["name", "shared_doctype", "shared_name"]):
