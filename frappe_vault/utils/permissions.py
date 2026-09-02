@@ -28,20 +28,45 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
     if "Vault Admin" in roles or "System Manager" in roles:
         return 4
 
-    doc_folder = None
+    doc_folders = []
     if shared_doctype == "Vault Secret":
         res = frappe.db.get_value("Vault Secret", shared_name, ["owner", "folder"])
         doc_owner, doc_folder = res if res else (None, None)
         if doc_owner == user:
             return 4
         if doc_folder:
-            folder_owner = frappe.db.get_value("Vault Folder", doc_folder, "owner")
-            if folder_owner == user:
+            doc_folders.append(doc_folder)
+            try:
+                from frappe.utils.nestedset import get_ancestors_of
+
+                doc_folders.extend(get_ancestors_of("Vault Folder", doc_folder))
+            except Exception:
+                pass
+
+            # If the user owns any ancestor folder, they get full control
+            folder_owners = frappe.db.get_all(
+                "Vault Folder", filters={"name": ("in", doc_folders)}, pluck="owner"
+            )
+            if user in folder_owners:
                 return 4
+
     elif shared_doctype == "Vault Folder":
-        doc_owner = frappe.db.get_value("Vault Folder", shared_name, "owner")
-        if doc_owner == user:
+        doc_folders.append(shared_name)
+        try:
+            from frappe.utils.nestedset import get_ancestors_of
+
+            doc_folders.extend(get_ancestors_of("Vault Folder", shared_name))
+        except Exception:
+            pass
+
+        folder_owners = frappe.db.get_all(
+            "Vault Folder", filters={"name": ("in", doc_folders)}, pluck="owner"
+        )
+        if user in folder_owners:
             return 4
+
+    if not doc_folders:
+        doc_folders = [""]  # Dummy to prevent SQL syntax error on empty IN
 
     # Direct User Shares (non-role-override)
     user_shares = frappe.db.sql(
@@ -54,11 +79,11 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
           AND (expires_on IS NULL OR expires_on > NOW())
           AND (
               (shared_doctype = %s AND shared_name = %s)
-              OR (%s = 'Vault Secret' AND shared_doctype = 'Vault Folder' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s)
           )
         ORDER BY creation DESC
     """,
-        (user, shared_doctype, shared_name, shared_doctype, doc_folder or ""),
+        (user, shared_doctype, shared_name, tuple(doc_folders)),
         as_dict=True,
     )
     if user_shares:
@@ -77,10 +102,10 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
               AND (expires_on IS NULL OR expires_on > NOW())
               AND (
                   (shared_doctype = %s AND shared_name = %s)
-                  OR (%s = 'Vault Secret' AND shared_doctype = 'Vault Folder' AND shared_name = %s)
+                  OR (shared_doctype = 'Vault Folder' AND shared_name IN %s)
               )
         """,
-            (tuple(roles), shared_doctype, shared_name, shared_doctype, doc_folder or ""),
+            (tuple(roles), shared_doctype, shared_name, tuple(doc_folders)),
             as_dict=True,
         )
 
@@ -93,11 +118,11 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
           AND is_role_override = 1
           AND (
               (shared_doctype = %s AND shared_name = %s)
-              OR (%s = 'Vault Secret' AND shared_doctype = 'Vault Folder' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s)
           )
         ORDER BY creation DESC
     """,
-        (user, shared_doctype, shared_name, shared_doctype, doc_folder or ""),
+        (user, shared_doctype, shared_name, tuple(doc_folders)),
         as_dict=True,
     )
 
@@ -160,10 +185,11 @@ def get_secret_permission_query(user=None):
         )
         OR (
             `tabVault Secret`.folder IS NOT NULL
-            AND `tabVault Secret`.folder IN (
-                SELECT vs.shared_name
-                FROM `tabVault Share` vs
-                WHERE vs.shared_doctype = 'Vault Folder'
+            AND EXISTS (
+                SELECT 1 FROM `tabVault Folder` secret_folder
+                JOIN `tabVault Folder` ancestor ON secret_folder.lft >= ancestor.lft AND secret_folder.rgt <= ancestor.rgt
+                JOIN `tabVault Share` vs ON vs.shared_doctype = 'Vault Folder' AND vs.shared_name = ancestor.name
+                WHERE secret_folder.name = `tabVault Secret`.folder
                 AND vs.is_revoked = 0
                 AND (
                     (vs.share_type = 'User' AND vs.user = {user_escaped})
@@ -184,9 +210,11 @@ def get_secret_permission_query(user=None):
         )
         OR (
             `tabVault Secret`.folder IS NOT NULL
-            AND `tabVault Secret`.folder IN (
-                SELECT name FROM `tabVault Folder`
-                WHERE owner = {user_escaped}
+            AND EXISTS (
+                SELECT 1 FROM `tabVault Folder` secret_folder
+                JOIN `tabVault Folder` ancestor ON secret_folder.lft >= ancestor.lft AND secret_folder.rgt <= ancestor.rgt
+                WHERE secret_folder.name = `tabVault Secret`.folder
+                AND ancestor.owner = {user_escaped}
             )
         )
     )"""
@@ -194,119 +222,28 @@ def get_secret_permission_query(user=None):
 
 def has_secret_permission(doc, ptype="read", user=None):
     """Check if a user has permission on a specific Vault Secret document."""
-    if not user:
-        user = frappe.session.user
-
-    if user == "Administrator":
-        return True
-
-    roles = frappe.get_roles(user)
-    if "Vault Admin" in roles or "System Manager" in roles:
-        return True
-
     if ptype == "create":
         return True
 
-    # Safely resolve document name, owner and folder
+    # Safely resolve document name
     if isinstance(doc, str):
         doc_name = doc
-        res = frappe.db.get_value("Vault Secret", doc_name, ["owner", "folder"])
-        doc_owner, doc_folder = res if res else (None, None)
     elif isinstance(doc, dict):
         doc_name = doc.get("name")
-        doc_owner = doc.get("owner")
-        doc_folder = doc.get("folder")
-        if not doc_owner or not doc_folder:
-            res = frappe.db.get_value("Vault Secret", doc_name, ["owner", "folder"])
-            if res:
-                doc_owner, doc_folder = res
     else:
         doc_name = doc.name
-        doc_owner = doc.owner
-        doc_folder = doc.folder
 
     if not doc_name:
         return False
 
-    # Owner always has access
-    if doc_owner == user:
-        return True
+    level = get_effective_user_permission("Vault Secret", doc_name, user)
 
-    # Folder owner always has access to secrets inside
-    if doc_folder:
-        folder_owner = frappe.db.get_value("Vault Folder", doc_folder, "owner")
-        if folder_owner == user:
-            return True
-
-    # Check active user-specific share first (explicit user level takes priority over everything else)
-    user_shares = frappe.db.sql(
-        """
-        SELECT permission_level FROM `tabVault Share`
-        WHERE share_type = 'User'
-          AND user = %s
-          AND is_revoked = 0
-          AND (expires_on IS NULL OR expires_on > NOW())
-          AND (
-              (shared_doctype = 'Vault Secret' AND shared_name = %s)
-              OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
-          )
-    """,
-        (user, doc_name, doc_folder or ""),
-        as_dict=True,
-    )
-
-    perm_map = {"View Only": 1, "View & Copy": 2, "Edit": 3, "Full Control": 4}
-
-    if user_shares:
-        highest_share = max(user_shares, key=lambda s: perm_map.get(s.permission_level, 0))
-        level = perm_map.get(highest_share.permission_level, 1)
-        if ptype in ("read",):
-            return level >= 1
-        elif ptype in ("write",):
-            return level >= 3
-        elif ptype in ("delete", "share"):
-            return level >= 4
-
-    # If no active user share exists, check if user was explicitly revoked
-    # This prevents them from inheriting access via a role if they were explicitly removed
-    if frappe.db.exists(
-        "Vault Share",
-        {
-            "shared_name": doc_name,
-            "shared_doctype": "Vault Secret",
-            "share_type": "User",
-            "user": user,
-            "is_revoked": 1,
-        },
-    ):
-        return False
-
-    # Check active role shares if no explicit user share exists
-    if roles:
-        role_shares = frappe.db.sql(
-            """
-            SELECT permission_level FROM `tabVault Share`
-            WHERE share_type = 'Role'
-              AND frappe_role IN %s
-              AND is_revoked = 0
-              AND (expires_on IS NULL OR expires_on > NOW())
-              AND (
-                  (shared_doctype = 'Vault Secret' AND shared_name = %s)
-                  OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
-              )
-        """,
-            (tuple(roles), doc_name, doc_folder or ""),
-            as_dict=True,
-        )
-        if role_shares:
-            highest_share = max(role_shares, key=lambda s: perm_map.get(s.permission_level, 0))
-            level = perm_map.get(highest_share.permission_level, 1)
-            if ptype in ("read",):
-                return level >= 1
-            elif ptype in ("write",):
-                return level >= 3
-            elif ptype in ("delete", "share"):
-                return level >= 4
+    if ptype in ("read",):
+        return level >= 1
+    elif ptype in ("write",):
+        return level >= 3
+    elif ptype in ("delete", "share"):
+        return level >= 4
 
     return False
 
@@ -327,10 +264,10 @@ def get_folder_permission_query(user=None):
 
     return f"""(
         `tabVault Folder`.owner = {user_escaped}
-        OR `tabVault Folder`.name IN (
-            SELECT vs.shared_name
-            FROM `tabVault Share` vs
-            WHERE vs.shared_doctype = 'Vault Folder'
+        OR EXISTS (
+            SELECT 1 FROM `tabVault Folder` ancestor
+            JOIN `tabVault Share` vs ON vs.shared_doctype = 'Vault Folder' AND vs.shared_name = ancestor.name
+            WHERE `tabVault Folder`.lft >= ancestor.lft AND `tabVault Folder`.rgt <= ancestor.rgt
             AND vs.is_revoked = 0
             AND (
                 (vs.share_type = 'User' AND vs.user = {user_escaped})
@@ -353,84 +290,28 @@ def get_folder_permission_query(user=None):
 
 def has_folder_permission(doc, ptype="read", user=None):
     """Check if a user has permission on a specific Vault Folder document."""
-    if not user:
-        user = frappe.session.user
-
-    if user == "Administrator":
-        return True
-
-    roles = frappe.get_roles(user)
-    if "Vault Admin" in roles or "System Manager" in roles:
-        return True
-
     if ptype == "create":
         return True
 
     # Safely resolve folder name
     if isinstance(doc, str):
         doc_name = doc
-        doc_owner = frappe.db.get_value("Vault Folder", doc_name, "owner")
     elif isinstance(doc, dict):
         doc_name = doc.get("name")
-        doc_owner = doc.get("owner") or frappe.db.get_value("Vault Folder", doc_name, "owner")
     else:
         doc_name = doc.name
-        doc_owner = doc.owner
 
-    if doc_owner == user:
-        return True
+    if not doc_name:
+        return False
 
-    # Check explicit active user-specific share for this folder first
-    user_shares = frappe.db.sql(
-        """
-        SELECT permission_level FROM `tabVault Share`
-        WHERE shared_doctype = 'Vault Folder'
-          AND shared_name = %s
-          AND share_type = 'User'
-          AND user = %s
-          AND is_revoked = 0
-          AND (expires_on IS NULL OR expires_on > NOW())
-    """,
-        (doc_name, user),
-        as_dict=True,
-    )
+    level = get_effective_user_permission("Vault Folder", doc_name, user)
 
-    perm_map = {"View Only": 1, "View & Copy": 2, "Edit": 3, "Full Control": 4}
-
-    if user_shares:
-        highest_share = max(user_shares, key=lambda s: perm_map.get(s.permission_level, 0))
-        level = perm_map.get(highest_share.permission_level, 1)
-        if ptype in ("read",):
-            return level >= 1
-        elif ptype in ("write",):
-            return level >= 3
-        elif ptype in ("delete", "share"):
-            return level >= 4
-
-    # Check active role shares if no explicit user share exists for this folder
-    if roles:
-        role_shares = frappe.db.sql(
-            """
-            SELECT permission_level FROM `tabVault Share`
-            WHERE shared_doctype = 'Vault Folder'
-              AND shared_name = %s
-              AND share_type = 'Role'
-              AND frappe_role IN %s
-              AND is_revoked = 0
-              AND (expires_on IS NULL OR expires_on > NOW())
-        """,
-            (doc_name, tuple(roles)),
-            as_dict=True,
-        )
-        if role_shares:
-            highest_share = max(role_shares, key=lambda s: perm_map.get(s.permission_level, 0))
-            level = perm_map.get(highest_share.permission_level, 1)
-            if ptype in ("read",):
-                return level >= 1
-            elif ptype in ("write",):
-                return level >= 3
-            elif ptype in ("delete", "share"):
-                return level >= 4
+    if ptype in ("read",):
+        return level >= 1
+    elif ptype in ("write",):
+        return level >= 3
+    elif ptype in ("delete", "share"):
+        return level >= 4
 
     return False
 
