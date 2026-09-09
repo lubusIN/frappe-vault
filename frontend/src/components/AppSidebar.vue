@@ -326,6 +326,9 @@
         :folderTitle="folderToManageShares?.folder_name"
         :isOwnerOrAdmin="isManagingFolderOwnerOrAdmin"
       />
+
+      <!-- Settings Modal -->
+      <SettingsModal v-if="showSettingsModal" v-model="showSettingsModal" />
   </Sidebar>
 </template>
 
@@ -344,6 +347,7 @@ import {
 import NotificationsPanel from './NotificationsPanel.vue'
 import ShareItemDialog from './ShareItemDialog.vue'
 import ManageFolderSharesDialog from './ManageFolderSharesDialog.vue'
+import SettingsModal from './SettingsModal.vue'
 import LayoutDashboard from '~icons/lucide/layout-dashboard'
 import HelpCircleIcon from '~icons/lucide/help-circle'
 import HeartIcon from '~icons/lucide/heart'
@@ -604,6 +608,7 @@ const sidebarCollapsedComputed = computed({
 })
 
 const showAboutModal = ref(false)
+const showSettingsModal = ref(false)
 
 const vaultVersion = computed(() => {
   return window.frappe?.boot?.versions?.frappe_vault || '1.1.0'
@@ -675,13 +680,6 @@ function checkActive(to) {
   return route.path === pathStr || route.path.startsWith(pathStr + '/')
 }
 
-function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme')
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
-  document.documentElement.setAttribute('data-theme', newTheme)
-  localStorage.setItem('theme', newTheme)
-}
-
 const sidebarConfig = reactive({
   header: computed(() => ({
     title: 'Vault',
@@ -703,10 +701,11 @@ const sidebarConfig = reactive({
               }
             ]
           },
+
           {
-            label: 'Toggle Theme',
-            icon: 'lucide-moon',
-            onClick: toggleTheme
+            icon: 'lucide-settings',
+            label: 'Settings',
+            onClick: () => { showSettingsModal.value = true }
           },
           {
             icon: 'lucide-info',

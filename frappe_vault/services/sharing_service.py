@@ -467,6 +467,9 @@ def get_role_users(
                 elif override_share and override_share.is_revoked:
                     is_revoked = True
                     perm_level = override_share.permission_level or role_share_perm
+                elif any(s.is_revoked for s in user_shares):
+                    is_revoked = True
+                    perm_level = user_shares[0].permission_level if user_shares else role_share_perm
                 elif not role_name:
                     is_revoked = True
                     perm_level = user_shares[0].permission_level if user_shares else role_share_perm
