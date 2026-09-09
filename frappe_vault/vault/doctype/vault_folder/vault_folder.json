@@ -7,7 +7,12 @@
  "engine": "InnoDB",
  "field_order": [
   "folder_name",
-  "icon"
+  "parent_vault_folder",
+  "is_group",
+  "icon",
+  "old_parent",
+  "lft",
+  "rgt"
  ],
  "fields": [
   {
@@ -22,6 +27,41 @@
    "fieldname": "icon",
    "fieldtype": "Data",
    "label": "Icon"
+  },
+  {
+   "fieldname": "parent_vault_folder",
+   "fieldtype": "Link",
+   "label": "Parent Folder",
+   "options": "Vault Folder",
+   "ignore_user_permissions": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_group",
+   "fieldtype": "Check",
+   "label": "Is Group"
+  },
+  {
+   "fieldname": "old_parent",
+   "fieldtype": "Link",
+   "label": "Old Parent",
+   "options": "Vault Folder"
+  },
+  {
+   "fieldname": "lft",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Left",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "rgt",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Right",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
@@ -61,5 +101,6 @@
  "sort_order": "DESC",
  "states": [],
  "title_field": "folder_name",
- "track_changes": 1
+ "track_changes": 1,
+ "is_tree": 1
 }

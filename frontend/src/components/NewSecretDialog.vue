@@ -6,7 +6,22 @@
 
         <FormControl label="Secret Type" type="select" v-model="form.secret_type" :options="SECRET_TYPES" />
 
-        <FormControl label="Folder" type="select" v-model="form.folder" :options="folderOptions" />
+        <div>
+          <label class="block text-xs font-medium text-ink-gray-7 mb-1.5">Folder</label>
+          <Autocomplete
+            v-model="selectedFolder"
+            :options="folderOptions"
+            placeholder="Select a folder..."
+          >
+            <template #item-prefix="{ option }">
+              <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
+                <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
+                <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
+                <div class="w-4 h-4 mr-2 shrink-0" v-else></div>
+              </div>
+            </template>
+          </Autocomplete>
+        </div>
 
         <div class="grid grid-cols-2 gap-4">
           <template v-for="field in secretFieldsConfig[form.secret_type] || []" :key="field.name">
@@ -98,7 +113,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Dialog, FormControl, Button, FeatherIcon, toast } from 'frappe-ui'
+import { Dialog, FormControl, Button, FeatherIcon, toast, Autocomplete } from 'frappe-ui'
+import { Icon } from 'frappe-ui/icons'
 import { SECRET_TYPES } from '../composables/constants'
 import { secretFieldsConfig } from '../composables/secretFields'
 import { useFolders, useCreateSecret } from '../composables/vault'
@@ -120,12 +136,36 @@ const createResource = useCreateSecret()
 const foldersResource = useFolders()
 
 const folderOptions = computed(() => {
-  const opts = [{ label: 'None', value: '' }]
-  for (const f of foldersResource.data || []) {
-    if (f.can_write) {
-      opts.push({ label: f.folder_name, value: f.name })
+  const opts = [{ label: 'None', value: '', level: 0 }]
+  const folders = foldersResource.data || []
+
+  // Build a tree structure so we can traverse it and get correct visual ordering
+  const tree = []
+  const map = {}
+  folders.forEach(f => {
+    map[f.name] = { ...f, children: [] }
+  })
+
+  folders.forEach(f => {
+    if (f.parent_vault_folder && map[f.parent_vault_folder]) {
+      map[f.parent_vault_folder].children.push(map[f.name])
+    } else {
+      tree.push(map[f.name])
+    }
+  })
+
+  const traverse = (nodes, level = 0) => {
+    for (const node of nodes) {
+      if (node.can_write) {
+        opts.push({ label: node.folder_name, value: node.name, level })
+      }
+      if (node.children?.length) {
+        traverse(node.children, level + 1)
+      }
     }
   }
+
+  traverse(tree)
   return opts
 })
 
@@ -136,6 +176,19 @@ const defaultForm = () => ({
 })
 
 const form = ref(defaultForm())
+const selectedFolder = ref(null)
+
+watch(() => form.value.folder, (newFolder) => {
+  if (typeof newFolder === 'string') {
+    selectedFolder.value = folderOptions.value.find(o => o.value === newFolder) || { label: 'None', value: '' }
+  }
+})
+
+watch(selectedFolder, (newVal) => {
+  if (newVal) {
+    form.value.folder = newVal.value
+  }
+})
 const attachmentList = ref([])
 const showSecrets = ref(false)
 const uploadingFiles = ref(false)
