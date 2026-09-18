@@ -43,6 +43,25 @@ frappe.ui.form.on("Vault Settings", {
                 }
             );
         }, __("Actions"));
+
+        if (frm.doc.enable_hashicorp_vault) {
+            frm.add_custom_button(__("Test HashiCorp Vault Connection"), function() {
+                frappe.call({
+                    method: "frappe_vault.api.hashicorp_vault.test_connection",
+                    freeze: true,
+                    freeze_message: __("Contacting HashiCorp Vault..."),
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.msgprint({
+                                title: __("Connection Successful"),
+                                message: r.message.message,
+                                indicator: "green"
+                            });
+                        }
+                    }
+                });
+            }, __("Actions"));
+        }
     },
     validate(frm) {
         if (frm.doc.default_password_length && frm.doc.default_password_length < 4) {

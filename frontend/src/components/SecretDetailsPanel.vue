@@ -371,7 +371,7 @@
           {{ secretData.last_target_apply_error }}
         </p>
 
-        <div v-if="canEdit && (secretData.enable_rotation || secretData.secret_type === 'Database')" class="flex justify-end gap-2 pt-1">
+        <div v-if="canEdit" class="flex justify-end gap-2 pt-1">
           <Button
             v-if="secretData.secret_type === 'Database'"
             variant="outline"
@@ -382,7 +382,28 @@
             @click="handleTestConnection"
           />
           <Button v-if="secretData.enable_rotation" variant="outline" size="sm" icon="lucide-refresh-cw" label="Rotate Now" @click="$emit('open-rotate')" />
+          <Button variant="outline" size="sm" icon="lucide-cloud-upload" label="Sync to HashiCorp Vault" :loading="hashicorpSyncResource.loading" @click="handleSyncToHashicorp" />
         </div>
+
+        <div v-if="secretData.hashicorp_sync_status" class="flex items-center justify-between py-1 text-sm">
+          <span class="w-28 shrink-0 text-ink-gray-5 font-normal">HashiCorp Vault</span>
+          <span
+            class="min-w-0 flex-1 text-right font-medium truncate"
+            :class="secretData.hashicorp_sync_status === 'Success' ? 'text-ink-green-3' : 'text-ink-red-3'"
+          >
+            {{ secretData.hashicorp_sync_status === 'Success' ? 'Synced' : 'Sync Failed' }}
+            <span v-if="secretData.hashicorp_synced_on" class="text-ink-gray-5 font-normal">
+              &middot; {{ formatRelativeTime(secretData.hashicorp_synced_on) }}
+            </span>
+          </span>
+        </div>
+
+        <p
+          v-if="secretData.hashicorp_sync_status === 'Failed' && secretData.hashicorp_sync_error"
+          class="text-xs text-ink-red-3 bg-surface-red-1 border border-outline-red-1 rounded-lg p-2 whitespace-pre-line break-words"
+        >
+          {{ secretData.hashicorp_sync_error }}
+        </p>
 
 
         <!-- Dynamic Fields Array -->
@@ -554,6 +575,7 @@ import {
   useTestDbConnection,
   useTestLinuxConnection,
   useFingerprintSshKey,
+  useSyncToHashicorpVault,
 } from '../composables/vault'
 import { secretTypeOptions, ROTATION_UNITS, ROTATABLE_SECRET_TYPES, SYNCED_SECRET_TYPES, DATABASE_DEFAULT_PORTS, formatRelativeTime } from '../composables/constants'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
@@ -579,6 +601,7 @@ const updateResource = useUpdateSecret()
 const clearPassphraseResource = useClearZipPassphrase()
 const testConnectionResource = useTestDbConnection()
 const linuxTestResource = useTestLinuxConnection()
+const hashicorpSyncResource = useSyncToHashicorpVault()
 
 // Identifies whatever is pasted into the SSH key field so it can be checked
 // against what was actually installed on the server, before Test Connection
@@ -684,7 +707,7 @@ const editForm = reactive({
   ansible_ssh_private_key: '',
   ansible_become_password: '',
   ansible_use_become: 1,
-  strict_host_key_checking: 1,
+  strict_host_key_checking: 0,
   ssh_port: 22,
 })
 
@@ -1032,6 +1055,20 @@ async function handleTestConnection() {
     toast.success(result.message || 'Connection succeeded')
   } catch (err) {
     toast.error(err.messages?.[0] || err.message || 'Could not reach the database')
+  }
+}
+
+async function handleSyncToHashicorp() {
+  try {
+    const result = await hashicorpSyncResource.submit({ name: props.name })
+    if (result.success) {
+      toast.success(result.message || 'Synced to HashiCorp Vault')
+    } else {
+      toast.error(result.message || 'Sync to HashiCorp Vault failed')
+    }
+    emit('saved')
+  } catch (err) {
+    toast.error(err.messages?.[0] || err.message || 'Sync to HashiCorp Vault failed')
   }
 }
 

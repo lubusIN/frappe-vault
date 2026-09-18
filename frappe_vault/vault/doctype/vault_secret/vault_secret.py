@@ -114,6 +114,13 @@ class VaultSecret(Document):
         if self.is_new() or self.has_value_changed(self.rotating_field or "password"):
             self.password_last_changed = today()
 
+        # Read before `_save_passwords()` masks the field further down the save
+        # pipeline — by `on_update` this would always be False. A brand new
+        # secret of any type syncs once on creation; afterwards only a change to
+        # a rotatable credential (manual edit, Rotate Now, or the hourly
+        # rotation job) re-syncs it. See integrations/hashicorp_vault.py.
+        self.flags.vault_sync_pending = self.is_new() or self.has_plaintext_password()
+
         self.append_password_history()
         self.update_has_zip_passphrase()
         self.clear_orphaned_rotation_admin()

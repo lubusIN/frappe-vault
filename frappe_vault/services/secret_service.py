@@ -273,6 +273,10 @@ def get_secret(name: str, decrypt: bool = False) -> dict:
         "last_target_apply_status": doc.last_target_apply_status,
         "last_target_apply_on": str(doc.last_target_apply_on) if doc.last_target_apply_on else None,
         "last_target_apply_error": doc.last_target_apply_error,
+        "hashicorp_sync_status": doc.hashicorp_sync_status,
+        "hashicorp_synced_on": str(doc.hashicorp_synced_on) if doc.hashicorp_synced_on else None,
+        "hashicorp_vault_path": doc.hashicorp_vault_path,
+        "hashicorp_sync_error": doc.hashicorp_sync_error,
         "owner": doc.owner,
         # Viewing values is stricter than viewing the record: the admin bypass
         # does not apply. Sent so the UI can present that plainly rather than

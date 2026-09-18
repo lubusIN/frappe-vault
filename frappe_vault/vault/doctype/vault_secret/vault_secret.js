@@ -18,6 +18,9 @@ frappe.ui.form.on("Vault Secret", {
 
         // Automatic rotation controls
         frappe_vault.setup_rotation_ui(frm);
+
+        // HashiCorp Vault sync controls
+        frappe_vault.setup_hashicorp_sync_ui(frm);
     },
 
     secret_type(frm) {
@@ -117,6 +120,45 @@ frappe_vault.run_rotate_now = function(frm) {
     }).catch(() => {
         frappe.dom.unfreeze();
     });
+};
+
+// HashiCorp Vault sync: manual push button + last-sync indicator.
+frappe_vault.setup_hashicorp_sync_ui = function(frm) {
+    if (frm.is_new()) {
+        return;
+    }
+
+    if (frm.doc.hashicorp_sync_status === "Success") {
+        frm.dashboard.add_indicator(
+            __("Synced to HashiCorp Vault {0}", [frappe.datetime.prettyDate(frm.doc.hashicorp_synced_on)]),
+            "green"
+        );
+    } else if (frm.doc.hashicorp_sync_status === "Failed") {
+        frm.dashboard.add_indicator(__("HashiCorp Vault Sync Failed"), "red");
+    }
+
+    frm.add_custom_button(__("Sync to HashiCorp Vault"), () => {
+        frappe.dom.freeze(__("Syncing to HashiCorp Vault..."));
+        frappe.call({
+            method: "frappe_vault.api.hashicorp_vault.sync_secret",
+            args: { name: frm.doc.name }
+        }).then((r) => {
+            frappe.dom.unfreeze();
+            const res = r.message || {};
+            if (res.success) {
+                frappe.show_alert({ message: res.message, indicator: "green" });
+            } else {
+                frappe.msgprint({
+                    title: __("Sync Failed"),
+                    message: res.message,
+                    indicator: res.skipped ? "orange" : "red"
+                });
+            }
+            frm.reload_doc();
+        }).catch(() => {
+            frappe.dom.unfreeze();
+        });
+    }, __("Actions"));
 };
 
 frappe_vault.setup_vault_secret_form = function(frm) {

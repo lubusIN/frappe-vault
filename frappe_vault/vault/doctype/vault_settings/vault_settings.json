@@ -16,7 +16,21 @@
   "prevent_reuse_count",
   "log_retention_days",
   "rotation_delivery_section",
-  "send_rotation_emails"
+  "send_rotation_emails",
+  "hashicorp_vault_section",
+  "enable_hashicorp_vault",
+  "hashicorp_auth_method",
+  "hashicorp_vault_url",
+  "hashicorp_vault_namespace",
+  "column_break_hashicorp",
+  "hashicorp_vault_token",
+  "hashicorp_approle_mount",
+  "hashicorp_role_id",
+  "hashicorp_secret_id",
+  "hashicorp_vault_mount",
+  "hashicorp_vault_path_prefix",
+  "hashicorp_verify_ssl",
+  "sync_on_password_change"
  ],
  "fields": [
   {
@@ -93,6 +107,110 @@
    "fieldname": "send_rotation_emails",
    "fieldtype": "Check",
    "label": "Email Rotated Passwords"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "hashicorp_vault_section",
+   "fieldtype": "Section Break",
+   "label": "HashiCorp Vault Integration"
+  },
+  {
+   "default": "0",
+   "description": "Push secrets to an external HashiCorp Vault KV v2 store. A 'Sync to HashiCorp Vault' button appears on every secret; enabling this also re-syncs a secret automatically whenever it is created or one of its passwords changes or rotates.",
+   "fieldname": "enable_hashicorp_vault",
+   "fieldtype": "Check",
+   "label": "Enable HashiCorp Vault Sync"
+  },
+  {
+   "default": "AppRole",
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "description": "AppRole (recommended): Vault issues a short-lived token from a Role ID + Secret ID, so no long-lived Vault token is ever stored here. Token: a single static token is stored and used forever — simpler, but that token becomes a standing credential in this database.",
+   "fieldname": "hashicorp_auth_method",
+   "fieldtype": "Select",
+   "label": "Authentication Method",
+   "options": "AppRole\nToken"
+  },
+  {
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "description": "e.g. https://vault.example.com:8200",
+   "fieldname": "hashicorp_vault_url",
+   "fieldtype": "Data",
+   "label": "Vault Server URL",
+   "mandatory_depends_on": "eval:doc.enable_hashicorp_vault"
+  },
+  {
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "description": "Only needed for Vault Enterprise.",
+   "fieldname": "hashicorp_vault_namespace",
+   "fieldtype": "Data",
+   "label": "Namespace"
+  },
+  {
+   "fieldname": "column_break_hashicorp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'Token'",
+   "description": "Stored encrypted, the same way as every other credential in Vault Settings. A standing credential — prefer AppRole above where possible.",
+   "fieldname": "hashicorp_vault_token",
+   "fieldtype": "Password",
+   "label": "Vault Token",
+   "mandatory_depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'Token'"
+  },
+  {
+   "default": "approle",
+   "depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'AppRole'",
+   "description": "The path this AppRole auth method is mounted at in Vault.",
+   "fieldname": "hashicorp_approle_mount",
+   "fieldtype": "Data",
+   "label": "AppRole Mount Path"
+  },
+  {
+   "depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'AppRole'",
+   "description": "Not secret on its own — identifies the role. Get it with: vault read auth/approle/role/<role>/role-id",
+   "fieldname": "hashicorp_role_id",
+   "fieldtype": "Data",
+   "label": "Role ID",
+   "mandatory_depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'AppRole'"
+  },
+  {
+   "depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'AppRole'",
+   "description": "Stored encrypted. Used only to log in and fetch a short-lived token — that token, not this Secret ID, is what actually talks to Vault, and it's cached and renewed automatically. Get one with: vault write -f auth/approle/role/<role>/secret-id",
+   "fieldname": "hashicorp_secret_id",
+   "fieldtype": "Password",
+   "label": "Secret ID",
+   "mandatory_depends_on": "eval:doc.enable_hashicorp_vault && doc.hashicorp_auth_method === 'AppRole'"
+  },
+  {
+   "default": "secret",
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "description": "The KV v2 secrets engine mount point.",
+   "fieldname": "hashicorp_vault_mount",
+   "fieldtype": "Data",
+   "label": "KV Mount Path"
+  },
+  {
+   "default": "frappe-vault",
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "description": "Each secret is written to '{mount}/data/{prefix}/{secret name}'.",
+   "fieldname": "hashicorp_vault_path_prefix",
+   "fieldtype": "Data",
+   "label": "Secret Path Prefix"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "fieldname": "hashicorp_verify_ssl",
+   "fieldtype": "Check",
+   "label": "Verify SSL Certificate"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_hashicorp_vault",
+   "description": "When off, secrets are only pushed when someone clicks 'Sync to HashiCorp Vault' on them directly.",
+   "fieldname": "sync_on_password_change",
+   "fieldtype": "Check",
+   "label": "Auto-sync on Password Change / Rotation"
   }
  ],
  "index_web_pages_for_search": 0,

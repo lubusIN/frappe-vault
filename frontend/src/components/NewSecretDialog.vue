@@ -91,10 +91,11 @@
                 v-model="form.ansible_become_password"
                 :type="showSecrets ? 'text' : 'password'"
               />
-              <p v-if="!form.strict_host_key_checking" class="text-xs text-ink-amber-6 leading-relaxed">
-                <FeatherIcon name="alert-triangle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
-                With host key checking off, Vault will push this password to whatever answers at those
-                addresses &mdash; including a machine impersonating your server.
+              <p v-if="!form.strict_host_key_checking" class="text-xs text-ink-gray-5 leading-relaxed">
+                <FeatherIcon name="info" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                Optional. Leave off to enrol hosts without pre-seeding known_hosts. Turn it on for hosts
+                reached over an untrusted network &mdash; each one's SSH key must then already be in the
+                Vault server's known_hosts.
               </p>
             </div>
 
@@ -390,12 +391,21 @@
 
         </div>
 
+        <div>
+          <FormControl type="checkbox" label="Sync to HashiCorp Vault" v-model="form.sync_to_hashicorp" />
+          <p class="text-xs text-ink-gray-5 leading-relaxed mt-1">
+            Pushes this secret to your configured HashiCorp Vault right after it's created, and again
+            whenever its password changes or rotates. Has no effect if HashiCorp Vault sync isn't
+            configured in Vault Settings.
+          </p>
+        </div>
+
         <FormControl label="Notes" type="textarea" v-model="form.notes" :rows="3" />
       </div>
     </template>
 
     <template #actions>
-      <Button variant="solid" @click="handleCreate" :loading="createResource.loading">Create</Button>
+      <Button variant="solid" @click="handleCreate" :loading="createResource.loading || hashicorpSyncResource.loading">Create</Button>
     </template>
   </Dialog>
 
@@ -413,7 +423,7 @@ import { SECRET_TYPES, ROTATION_UNITS, DATABASE_TYPES, DATABASE_DEFAULT_PORTS } 
 import { visibleFieldsFor } from '../composables/secretFields'
 import {
   useFolders, useCreateSecret, useTestDbConnectionParams, useTestLinuxConnectionParams,
-  useFingerprintSshKey, useVmInventoryAvailable,
+  useFingerprintSshKey, useVmInventoryAvailable, useSyncToHashicorpVault,
 } from '../composables/vault'
 import { cleanUrl, parseAttachments, isImageUrl, getFileName } from '../utils/attachments'
 import { validateTotpSecret } from '../utils/secretForm'
@@ -431,6 +441,7 @@ const show = computed({
 })
 
 const createResource = useCreateSecret()
+const hashicorpSyncResource = useSyncToHashicorpVault()
 const foldersResource = useFolders()
 
 const folderOptions = computed(() => {
@@ -452,7 +463,8 @@ const defaultForm = () => ({
   apply_rotation_to_target: 0, rotation_admin_username: '', rotation_admin_password: '',
   linux_hosts: [], ansible_user: '',
   ansible_ssh_private_key: '', ansible_become_password: '',
-  ansible_use_become: 1, strict_host_key_checking: 1, ssh_port: 22,
+  ansible_use_become: 1, strict_host_key_checking: 0, ssh_port: 22,
+  sync_to_hashicorp: 1,
 })
 
 const form = ref(defaultForm())
@@ -721,6 +733,8 @@ async function handleCreate() {
   }
 
   const payload = { ...form.value }
+  const syncToHashicorp = !!payload.sync_to_hashicorp
+  delete payload.sync_to_hashicorp
   if (payload.secret_type !== 'Linux Server') delete payload.linux_hosts
 
   if (payload.secret_type === 'Linux Server') {
@@ -785,6 +799,20 @@ async function handleCreate() {
   try {
     const result = await createResource.submit(payload)
     window.dispatchEvent(new CustomEvent('vault-secret-updated', { detail: { name: result?.name } }))
+
+    if (syncToHashicorp && result?.name) {
+      try {
+        const syncResult = await hashicorpSyncResource.submit({ name: result.name })
+        if (syncResult.success) {
+          toast.success(syncResult.message || 'Synced to HashiCorp Vault')
+        } else if (!syncResult.skipped) {
+          toast.error(syncResult.message || 'Sync to HashiCorp Vault failed')
+        }
+      } catch (syncErr) {
+        toast.error(syncErr.messages?.[0] || syncErr.message || 'Sync to HashiCorp Vault failed')
+      }
+    }
+
     emit('created', result)
   } catch (err) {
     if (err.messages?.length) {

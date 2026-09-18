@@ -62,6 +62,12 @@ export function useRotateNow() {
   })
 }
 
+export function useSyncToHashicorpVault() {
+  return createResource({
+    url: 'frappe_vault.api.hashicorp_vault.sync_secret',
+  })
+}
+
 // Tests a connection from unsaved form values, before any secret exists.
 export function useTestDbConnectionParams() {
   return createResource({

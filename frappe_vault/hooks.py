@@ -38,7 +38,10 @@ after_migrate = "frappe_vault.setup.install.after_migrate"
 doc_events = {
     "Vault Secret": {
         "after_insert": "frappe_vault.services.audit_service.log_secret_created",
-        "on_update": "frappe_vault.services.audit_service.log_secret_updated",
+        "on_update": [
+            "frappe_vault.services.audit_service.log_secret_updated",
+            "frappe_vault.integrations.hashicorp_vault.on_secret_update",
+        ],
         "on_trash": "frappe_vault.services.audit_service.log_secret_deleted",
     },
     "Vault Share": {
