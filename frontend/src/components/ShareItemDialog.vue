@@ -133,6 +133,19 @@
           type="datetime-local"
           v-model="newShareExpiresOn"
         />
+
+        <!-- Apply to Subfolders Checkbox -->
+        <div v-if="sharedDoctype === 'Vault Folder' && hasChildFolders" class="pt-2">
+          <div class="flex items-center gap-2">
+            <Checkbox
+              v-model="newShareCascade"
+              label="Apply to all subfolders"
+            />
+          </div>
+          <p class="text-[11px] text-ink-gray-5 mt-1 ml-6 leading-tight">
+            If checked, recipients will automatically get access to any subfolders inside this folder.
+          </p>
+        </div>
       </div>
     </template>
     <template #actions>
@@ -153,8 +166,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Dialog, Button, Avatar, FeatherIcon, FormControl, MultiSelect, TabButtons, toast } from 'frappe-ui'
-import { useShareOptions, useShareSecret } from '../composables/vault'
+import { Dialog, Button, Avatar, FeatherIcon, FormControl, MultiSelect, TabButtons, Checkbox, toast } from 'frappe-ui'
+import { useShareOptions, useShareSecret, useFolders } from '../composables/vault'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -174,10 +187,17 @@ const selectedUserEmails = ref([])
 const selectedRoles = ref([])
 const newSharePermission = ref('View Only')
 const newShareExpiresOn = ref('')
+const newShareCascade = ref(true)
 const isSharing = ref(false)
 
 const shareOptionsResource = useShareOptions()
 const shareResource = useShareSecret()
+const foldersResource = useFolders()
+
+const hasChildFolders = computed(() => {
+  if (props.sharedDoctype !== 'Vault Folder' || !foldersResource.data) return false
+  return foldersResource.data.some(f => f.parent_vault_folder === props.sharedName)
+})
 
 const shareOptions = computed(() => shareOptionsResource.data || { users: [], roles: [] })
 
@@ -220,8 +240,12 @@ watch(() => props.modelValue, (isOpen) => {
     selectedRoles.value = []
     newSharePermission.value = 'View Only'
     newShareExpiresOn.value = ''
+    newShareCascade.value = true
     if (!shareOptionsResource.data) {
       shareOptionsResource.fetch()
+    }
+    if (props.sharedDoctype === 'Vault Folder' && !foldersResource.data) {
+      foldersResource.fetch()
     }
   }
 })
@@ -243,6 +267,7 @@ async function handleShare() {
           user: email,
           permission_level: newSharePermission.value,
           expires_on: newShareExpiresOn.value || undefined,
+          cascade_permissions: newShareCascade.value ? 1 : 0,
         })
       }
     } else {
@@ -254,6 +279,7 @@ async function handleShare() {
           frappe_role: role,
           permission_level: newSharePermission.value,
           expires_on: newShareExpiresOn.value || undefined,
+          cascade_permissions: newShareCascade.value ? 1 : 0,
         })
       }
     }

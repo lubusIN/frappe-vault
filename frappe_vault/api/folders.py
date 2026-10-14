@@ -28,6 +28,7 @@ def get_all() -> list[dict]:
                 WHERE `tabVault Folder`.lft >= ancestor.lft AND `tabVault Folder`.rgt <= ancestor.rgt
                 AND vs.is_revoked = 0
                 AND vs.permission_level IN ('Edit', 'Full Control')
+                AND (vs.shared_name = `tabVault Folder`.name OR vs.cascade_permissions = 1)
                 AND (
                     (vs.share_type = 'User' AND vs.user = %(user)s)
                     OR (vs.share_type = 'Role' AND vs.frappe_role IN (
@@ -200,9 +201,14 @@ def update(
     if icon is not None:
         doc.icon = icon
     if parent_vault_folder is not None:
-        doc.parent_vault_folder = parent_vault_folder
+        doc.parent_vault_folder = parent_vault_folder if parent_vault_folder else None
     if is_group is not None:
         doc.is_group = is_group
+
+    # Prevent "cannot be a leaf node" NestedSet error if folder has children
+    has_children = frappe.db.count("Vault Folder", {"parent_vault_folder": name})
+    if has_children:
+        doc.is_group = 1
 
     doc.save()
     return {"name": doc.name}
