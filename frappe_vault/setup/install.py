@@ -163,7 +163,7 @@ def add_email_template_custom_fields():
 
     fields = [
         {
-            "default": "1",
+            "default": "0",
             "fieldname": "vault_enabled",
             "fieldtype": "Check",
             "label": "Enabled for Vault",

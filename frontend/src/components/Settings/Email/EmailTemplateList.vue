@@ -103,6 +103,7 @@ const selectedTemplateId = ref(null)
 const templates = createListResource({
   doctype: 'Email Template',
   fields: ['name', 'subject', 'vault_enabled', 'vault_is_default'],
+  filters: { vault_enabled: 1 },
   limit: 100,
   auto: true
 })
