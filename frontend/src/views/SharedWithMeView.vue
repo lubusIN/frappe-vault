@@ -65,6 +65,7 @@
               v-for="column in columns"
               :key="column.key"
               :item="column"
+              @columnWidthUpdated="handleColumnWidthUpdated"
             />
           </ListHeader>
           <ListRows class="sm:mx-5 mx-3">
@@ -151,6 +152,7 @@
 import ViewControlsBar from '../components/ViewControlsBar.vue'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useColumnResize } from '../composables/useColumnResize'
 import RefreshIcon from '../components/RefreshIcon.vue'
 import { Badge, Button, TextInput, FeatherIcon, ListView, ListHeader, ListHeaderItem, ListRows, ListRow, ListRowItem, ListSelectBanner, ListFooter, Breadcrumbs, toast } from 'frappe-ui'
 import { mobileSidebarOpened, useSharedWithMe, useFolders } from '../composables/vault'
@@ -194,13 +196,19 @@ const filteredList = computed(() => {
   return result || []
 })
 
-const columns = ref([
-  { label: 'Title', key: 'title', width: '18rem' },
+const defaultColumns = [
   { label: 'Type', key: 'secret_type', width: '10rem' },
   { label: 'Shared By', key: 'shared_by', width: '14rem' },
   { label: 'Permission', key: 'permission_level', width: '11rem' },
   { label: 'Expires On', key: 'expires_on', width: '11rem' }
-])
+]
+
+const baseColumns = computed(() => {
+  const titleCol = { label: 'Title', key: 'title', width: 1 }
+  return [titleCol, ...defaultColumns]
+})
+
+const { columns, handleColumnWidthUpdated } = useColumnResize('shared-with-me-column-widths', baseColumns)
 
 const formattedRows = computed(() => {
   return filteredList.value.map(s => {

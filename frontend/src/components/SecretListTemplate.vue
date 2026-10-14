@@ -120,6 +120,7 @@
               v-for="column in columns"
               :key="column.key"
               :item="column"
+              @columnWidthUpdated="handleColumnWidthUpdated"
             />
           </ListHeader>
           <ListRows class="sm:mx-5 mx-3">
@@ -261,6 +262,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useColumnResize } from '../composables/useColumnResize'
 import RefreshIcon from './RefreshIcon.vue'
 import FilterPanel from './FilterPanel.vue'
 import SortPanel from './SortPanel.vue'
@@ -460,12 +462,13 @@ const moreOptions = computed(() => {
   ]
 })
 
-// Fixed columns: title (always first) and _actions (always last)
-const columns = computed(() => {
-  const titleCol = { label: 'Title', key: 'title', width: '18rem' }
+const baseColumns = computed(() => {
+  const titleCol = { label: 'Title', key: 'title', width: 1 }
   const actionsCol = { label: '', key: '_actions', width: '6rem', align: 'right' }
   return [titleCol, ...activeColumnDefs.value, actionsCol]
 })
+
+const { columns, handleColumnWidthUpdated } = useColumnResize('vault-column-widths', baseColumns)
 
 const formattedRows = computed(() => {
   return secretsList.value.map(secret => {
