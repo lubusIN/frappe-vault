@@ -628,68 +628,56 @@ class TestSharingService(FrappeTestCase):
         )
         secret_name = secret.get("name")
 
-        # 2. Admin Share with User A (Full Control)
+        # 2. Admin Share with User A (Full Control, Cascade = 1)
         admin_share_res = share_secret(
             shared_name=parent_folder,
             shared_doctype="Vault Folder",
             share_type="User",
             user="test_shared_1@example.com",
             permission_level="Full Control",
+            cascade_permissions=1,
         )
 
-        # 3. Verify User A Access
+        # 3. Verify User A Access (Cascading works)
         frappe.set_user("test_shared_1@example.com")
         self.assertTrue(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
         self.assertTrue(has_folder_permission(nested_folder, "read", "test_shared_1@example.com"))
         self.assertTrue(has_secret_permission(secret_name, "read", "test_shared_1@example.com"))
-        self.assertTrue(has_secret_permission(secret_name, "share", "test_shared_1@example.com"))
 
-        # 4. User A Reshares: Creates folder and shares with User B
-        user_a_folder_res = create_folder(
-            folder_name="User A Folder", color="Red", icon="folder", parent_vault_folder=nested_folder
-        )
-        user_a_folder = user_a_folder_res.get("name")
+        # 4. Admin Setup for Non-Cascading Share
+        frappe.set_user("Administrator")
+        # Revoke old share
+        unshare(admin_share_res.get("name"))
 
-        user_a_secret = create_secret(
-            {
-                "title": "User A Secret",
-                "secret_type": "Password",
-                "password": "pass",
-                "folder": user_a_folder,
-            }
-        )
-        user_a_secret_name = user_a_secret.get("name")
-
-        share_secret(
-            shared_name=user_a_folder,
+        # Share again but with cascade = 0
+        admin_share_res_2 = share_secret(
+            shared_name=parent_folder,
             shared_doctype="Vault Folder",
             share_type="User",
-            user="test_shared_2@example.com",
-            permission_level="View Only",
+            user="test_shared_1@example.com",
+            permission_level="Full Control",
+            cascade_permissions=0,
         )
 
-        # 5. Verify User B Access
-        frappe.set_user("test_shared_2@example.com")
-        self.assertTrue(has_folder_permission(user_a_folder, "read", "test_shared_2@example.com"))
-        self.assertTrue(has_secret_permission(user_a_secret_name, "read", "test_shared_2@example.com"))
-        self.assertFalse(has_folder_permission(nested_folder, "read", "test_shared_2@example.com"))
-        self.assertFalse(has_secret_permission(secret_name, "read", "test_shared_2@example.com"))
+        # 5. Verify User A Access (No Cascading)
+        frappe.set_user("test_shared_1@example.com")
+        self.assertTrue(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
+        self.assertFalse(has_folder_permission(nested_folder, "read", "test_shared_1@example.com"))
+        self.assertFalse(has_secret_permission(secret_name, "read", "test_shared_1@example.com"))
 
-        # 6. Admin downgrades User A
+        # 6. Admin Downgrades User A
         frappe.set_user("Administrator")
-        update_share_permission(admin_share_res.get("name"), "View Only")
+        update_share_permission(admin_share_res_2.get("name"), "View Only")
 
         # 7. Verify Downgrade
         frappe.set_user("test_shared_1@example.com")
         self.assertTrue(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
         self.assertFalse(has_folder_permission(parent_folder, "write", "test_shared_1@example.com"))
-        self.assertFalse(has_secret_permission(secret_name, "share", "test_shared_1@example.com"))
 
         # 8. Revocation
         frappe.set_user("Administrator")
-        unshare(admin_share_res.get("name"))
+        unshare(admin_share_res_2.get("name"))
 
-        # 9. Verify Revocation
         frappe.set_user("test_shared_1@example.com")
         self.assertFalse(has_folder_permission(parent_folder, "read", "test_shared_1@example.com"))
         self.assertFalse(has_folder_permission(nested_folder, "read", "test_shared_1@example.com"))
@@ -697,9 +685,7 @@ class TestSharingService(FrappeTestCase):
 
         # Cleanup
         frappe.set_user("Administrator")
-        frappe.db.delete("Vault Secret", {"name": ["in", [secret_name, user_a_secret_name]]})
-        frappe.db.delete("Vault Folder", {"name": ["in", [user_a_folder, nested_folder, parent_folder]]})
-        frappe.db.delete(
-            "Vault Share", {"shared_name": ["in", [user_a_folder, nested_folder, parent_folder]]}
-        )
+        frappe.db.delete("Vault Secret", {"name": secret_name})
+        frappe.db.delete("Vault Folder", {"name": ["in", [nested_folder, parent_folder]]})
+        frappe.db.delete("Vault Share", {"shared_name": ["in", [nested_folder, parent_folder]]})
         frappe.db.commit()

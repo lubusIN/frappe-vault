@@ -29,21 +29,27 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
         return 4
 
     doc_folders = []
+    ancestor_folders = []
+    direct_folder = None
+
     if shared_doctype == "Vault Secret":
         res = frappe.db.get_value("Vault Secret", shared_name, ["owner", "folder"])
         doc_owner, doc_folder = res if res else (None, None)
         if doc_owner == user:
             return 4
         if doc_folder:
+            direct_folder = doc_folder
             doc_folders.append(doc_folder)
             try:
                 from frappe.utils.nestedset import get_ancestors_of
 
-                doc_folders.extend(get_ancestors_of("Vault Folder", doc_folder))
+                ancestors = get_ancestors_of("Vault Folder", doc_folder)
+                doc_folders.extend(ancestors)
+                ancestor_folders.extend(ancestors)
             except Exception:
                 pass
 
-            # If the user owns any ancestor folder, they get full control
+            # If the user owns the folder or any ancestor folder, they get full control
             folder_owners = frappe.db.get_all(
                 "Vault Folder", filters={"name": ("in", doc_folders)}, pluck="owner"
             )
@@ -51,11 +57,14 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
                 return 4
 
     elif shared_doctype == "Vault Folder":
+        direct_folder = shared_name
         doc_folders.append(shared_name)
         try:
             from frappe.utils.nestedset import get_ancestors_of
 
-            doc_folders.extend(get_ancestors_of("Vault Folder", shared_name))
+            ancestors = get_ancestors_of("Vault Folder", shared_name)
+            doc_folders.extend(ancestors)
+            ancestor_folders.extend(ancestors)
         except Exception:
             pass
 
@@ -65,8 +74,8 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
         if user in folder_owners:
             return 4
 
-    if not doc_folders:
-        doc_folders = [""]  # Dummy to prevent SQL syntax error on empty IN
+    if not ancestor_folders:
+        ancestor_folders = [""]  # Dummy to prevent SQL syntax error on empty IN
 
     # Direct User Shares (non-role-override)
     user_shares = frappe.db.sql(
@@ -79,11 +88,12 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
           AND (expires_on IS NULL OR expires_on > NOW())
           AND (
               (shared_doctype = %s AND shared_name = %s)
-              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s AND cascade_permissions = 1)
           )
         ORDER BY creation DESC
     """,
-        (user, shared_doctype, shared_name, tuple(doc_folders)),
+        (user, shared_doctype, shared_name, direct_folder, tuple(ancestor_folders)),
         as_dict=True,
     )
     if user_shares:
@@ -102,10 +112,11 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
               AND (expires_on IS NULL OR expires_on > NOW())
               AND (
                   (shared_doctype = %s AND shared_name = %s)
-                  OR (shared_doctype = 'Vault Folder' AND shared_name IN %s)
+                  OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
+                  OR (shared_doctype = 'Vault Folder' AND shared_name IN %s AND cascade_permissions = 1)
               )
         """,
-            (tuple(roles), shared_doctype, shared_name, tuple(doc_folders)),
+            (tuple(roles), shared_doctype, shared_name, direct_folder, tuple(ancestor_folders)),
             as_dict=True,
         )
 
@@ -118,11 +129,12 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
           AND is_role_override = 1
           AND (
               (shared_doctype = %s AND shared_name = %s)
-              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s AND cascade_permissions = 1)
           )
         ORDER BY creation DESC
     """,
-        (user, shared_doctype, shared_name, tuple(doc_folders)),
+        (user, shared_doctype, shared_name, direct_folder, tuple(ancestor_folders)),
         as_dict=True,
     )
 
@@ -191,6 +203,7 @@ def get_secret_permission_query(user=None):
                 JOIN `tabVault Share` vs ON vs.shared_doctype = 'Vault Folder' AND vs.shared_name = ancestor.name
                 WHERE secret_folder.name = `tabVault Secret`.folder
                 AND vs.is_revoked = 0
+                AND (vs.shared_name = `tabVault Secret`.folder OR vs.cascade_permissions = 1)
                 AND (
                     (vs.share_type = 'User' AND vs.user = {user_escaped})
                     OR (vs.share_type = 'Role' AND vs.frappe_role IN (
@@ -212,9 +225,8 @@ def get_secret_permission_query(user=None):
             `tabVault Secret`.folder IS NOT NULL
             AND EXISTS (
                 SELECT 1 FROM `tabVault Folder` secret_folder
-                JOIN `tabVault Folder` ancestor ON secret_folder.lft >= ancestor.lft AND secret_folder.rgt <= ancestor.rgt
                 WHERE secret_folder.name = `tabVault Secret`.folder
-                AND ancestor.owner = {user_escaped}
+                AND secret_folder.owner = {user_escaped}
             )
         )
     )"""
@@ -269,6 +281,7 @@ def get_folder_permission_query(user=None):
             JOIN `tabVault Share` vs ON vs.shared_doctype = 'Vault Folder' AND vs.shared_name = ancestor.name
             WHERE `tabVault Folder`.lft >= ancestor.lft AND `tabVault Folder`.rgt <= ancestor.rgt
             AND vs.is_revoked = 0
+            AND (vs.shared_name = `tabVault Folder`.name OR vs.cascade_permissions = 1)
             AND (
                 (vs.share_type = 'User' AND vs.user = {user_escaped})
                 OR (vs.share_type = 'Role' AND vs.frappe_role IN (
