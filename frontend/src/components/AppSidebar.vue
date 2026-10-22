@@ -67,6 +67,7 @@
             <template #item="{ node, expanded, toggle, hasChildren }">
               <router-link
                 :to="`/secrets?folder=${encodeURIComponent(node.name)}`"
+                @click.stop
                 class="flex h-7 min-w-0 flex-1 items-center rounded pl-0.5 pr-1.5 transition-colors focus:outline-none focus-visible:ring-0"
                 :class="
                   checkActive(`/secrets?folder=${encodeURIComponent(node.name)}`)
@@ -84,15 +85,15 @@
                 <span class="truncate text-[13px] flex-1">{{ node.label }}</span>
 
                 <!-- Suffix Actions (Arrow on right!) -->
-                <div class="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity ml-auto" @click.prevent.stop>
+                <div class="flex items-center gap-0.5 ml-auto" @click.prevent.stop>
                   <!-- Dropdown for options -->
                   <Dropdown v-if="getFolderOptions(node).length > 0" :options="getFolderOptions(node)">
                     <template #default="{ open }">
                       <Button
                         variant="ghost"
                         icon="lucide-more-horizontal"
-                        class="size-5 !p-0.5 text-ink-gray-6"
-                        :class="{ 'bg-surface-gray-3': open }"
+                        class="size-5 !p-0.5 text-ink-gray-6 transition-opacity opacity-0 group-hover/row:opacity-100"
+                        :class="{ 'bg-surface-gray-3 !opacity-100': open }"
                       />
                     </template>
                   </Dropdown>
@@ -295,14 +296,17 @@
               <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Parent Folder (Optional)</label>
               <Autocomplete
                 v-model="newFolderParent"
-                :options="folderOptions"
+                :options="writableFolderOptions"
                 placeholder="Select parent folder..."
-                :disabled="isSubfolderMode"
+                :disabled="isSubfolderMode || writableFolderOptions.length <= 1"
+                class="w-full text-sm"
+                :class="isSubfolderMode || writableFolderOptions.length <= 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
               >
                 <template #item-prefix="{ option }">
                   <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
                     <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
-                    <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
+                    <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
+                    <Icon name="lucide-align-horizontal-space-around" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
                   </div>
                 </template>
               </Autocomplete>
@@ -344,13 +348,17 @@
               <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Parent Folder (Optional)</label>
               <Autocomplete
                 v-model="editFolderParent"
-                :options="folderOptions.filter(o => o.value !== folderToEdit?.name)"
+                :options="editFolderParentOptions"
                 placeholder="Select parent folder..."
+                :disabled="editFolderParentOptions.length <= 1"
+                class="w-full text-sm"
+                :class="editFolderParentOptions.length <= 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
               >
                 <template #item-prefix="{ option }">
                   <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
                     <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
-                    <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
+                    <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
+                    <Icon name="lucide-align-horizontal-space-around" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
                   </div>
                 </template>
               </Autocomplete>
@@ -418,15 +426,17 @@
                 <div v-if="deleteSubfolderAction === 'move_to'" class="mt-2">
                   <Autocomplete
                     v-model="deleteTargetFolder"
-                    :options="folderOptions.filter(o => o.value !== folderToDelete?.name && !o.value.startsWith(folderToDelete?.name))"
+                    :options="deleteFolderTargetOptions"
                     placeholder="Select target folder..."
-                    class="w-full text-sm cursor-pointer"
+                    :disabled="deleteFolderTargetOptions.length <= 1"
+                    class="w-full text-sm"
+                    :class="deleteFolderTargetOptions.length <= 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
                   >
                     <template #item-prefix="{ option }">
                       <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
                         <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
                         <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
-                        <div class="w-4 h-4 mr-2 shrink-0" v-else></div>
+                        <Icon name="lucide-align-horizontal-space-around" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else />
                       </div>
                     </template>
                   </Autocomplete>
@@ -601,7 +611,7 @@ const folderOptions = computed(() => {
   const options = []
   const traverse = (nodes, level = 0) => {
     for (const node of nodes) {
-      options.push({ label: node.folder_name, value: node.name, level })
+      options.push({ label: node.folder_name, value: node.name, level, can_write: node.can_write })
       if (node.children?.length) {
         traverse(node.children, level + 1)
       }
@@ -609,6 +619,22 @@ const folderOptions = computed(() => {
   }
   traverse(folderTree.value)
   return options
+})
+
+const writableFolderOptions = computed(() => {
+  const options = folderOptions.value.filter(o => o.can_write || o.value === folderToEdit.value?.parent_vault_folder)
+  return [
+    { label: '— Root Level —', value: '', level: 0 },
+    ...options
+  ]
+})
+
+const editFolderParentOptions = computed(() => {
+  return writableFolderOptions.value.filter(o => o.value === '' || (o.value !== folderToEdit.value?.name && !o.value.startsWith(folderToEdit.value?.name)))
+})
+
+const deleteFolderTargetOptions = computed(() => {
+  return writableFolderOptions.value.filter(o => o.value === '' || (o.value !== folderToDelete.value?.name && !o.value.startsWith(folderToDelete.value?.name)))
 })
 
 function openCreateFolderDialog(parent = null) {
@@ -625,13 +651,14 @@ async function handleCreateFolder() {
     await createFolderResource.submit({
       folder_name: newFolderName.value.trim(),
       icon: newFolderIcon.value || 'folder',
-      parent_vault_folder: newFolderParent.value?.value || null,
+      parent_vault_folder: newFolderParent.value?.value || '',
       is_group: 0
     })
     showCreateFolderDialog.value = false
     foldersResource.reload()
     stats.reload()
   } catch (err) {
+    toast.error(parseFrappeError(err))
   }
 }
 
@@ -734,12 +761,13 @@ async function handleEditFolder() {
       name: folderToEdit.value.name,
       folder_name: editFolderName.value.trim(),
       icon: editFolderIcon.value || 'folder',
-      parent_vault_folder: editFolderParent.value?.value || null,
+      parent_vault_folder: editFolderParent.value?.value || '',
     })
     showEditFolderDialog.value = false
     folderToEdit.value = null
     foldersResource.reload()
   } catch (err) {
+    toast.error(parseFrappeError(err))
   }
 }
 
@@ -840,13 +868,22 @@ watch(
     }
     scan(folderTree.value)
 
+    const savedExpandedState = JSON.parse(localStorage.getItem('vault_folder_expanded_state') || '{}')
+
     if (allFolders) {
       allFolders.forEach(f => {
+        let isExpanded = false // Default to collapsed
+        if (preserveMap[f.name] !== undefined) {
+          isExpanded = preserveMap[f.name]
+        } else if (savedExpandedState[f.name] !== undefined) {
+          isExpanded = savedExpandedState[f.name]
+        }
+
         map[f.name] = {
           ...f,
           label: f.folder_name,
           children: [],
-          expanded: preserveMap[f.name] !== undefined ? preserveMap[f.name] : true
+          expanded: isExpanded
         }
       })
 
@@ -861,6 +898,22 @@ watch(
     folderTree.value = newTree
   },
   { immediate: true }
+)
+
+watch(
+  folderTree,
+  (newTree) => {
+    const state = JSON.parse(localStorage.getItem('vault_folder_expanded_state') || '{}')
+    const scan = (nodes) => {
+      for (const n of nodes) {
+        state[n.name] = n.expanded
+        if (n.children) scan(n.children)
+      }
+    }
+    scan(newTree)
+    localStorage.setItem('vault_folder_expanded_state', JSON.stringify(state))
+  },
+  { deep: true }
 )
 
 const userName = computed(() => {

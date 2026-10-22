@@ -110,6 +110,7 @@
     >
       <div class="flex-1 min-h-0 w-full">
         <AxisChart v-if="item.data && item.data.data && item.data.data.length" :config="item.data" />
+        <div v-else-if="item.data && item.data.data" class="h-full flex items-center justify-center text-xs text-ink-gray-4">No data available</div>
         <div v-else class="h-full flex items-center justify-center text-xs text-ink-gray-4">Loading chart...</div>
       </div>
     </div>
@@ -121,6 +122,7 @@
     >
       <div class="flex-1 min-h-0 w-full flex items-center justify-center relative overflow-hidden">
         <DonutChart v-if="item.data && item.data.data && item.data.data.length" :config="item.data" class="w-full h-full" />
+        <div v-else-if="item.data && item.data.data" class="h-full flex items-center justify-center text-xs text-ink-gray-4">No data available</div>
         <div v-else class="h-full flex items-center justify-center text-xs text-ink-gray-4">Loading chart...</div>
       </div>
     </div>

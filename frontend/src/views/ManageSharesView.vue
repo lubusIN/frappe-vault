@@ -78,6 +78,7 @@
               v-for="column in columns"
               :key="column.key"
               :item="column"
+              @columnWidthUpdated="handleColumnWidthUpdated"
             />
           </ListHeader>
           <ListRows class="sm:mx-5 mx-3">
@@ -261,8 +262,8 @@
             <TabButtons
               v-model="newShareDoctype"
               :options="[
-                { label: 'Secret', value: 'Vault Secret', class: 'flex-1 !justify-center', onClick: () => { newShareItem = '' } },
-                { label: 'Folder', value: 'Vault Folder', class: 'flex-1 !justify-center', onClick: () => { newShareItem = '' } }
+                { label: 'Secret', value: 'Vault Secret', class: 'flex-1 !justify-center', onClick: () => { newShareItem = ''; selectedItems = [] } },
+                { label: 'Folder', value: 'Vault Folder', class: 'flex-1 !justify-center', onClick: () => { newShareItem = ''; selectedItems = [] } }
               ]"
               class="w-full !flex"
             />
@@ -408,6 +409,19 @@
             type="datetime"
             v-model="newShareExpiresOn"
           />
+
+          <!-- Apply to Subfolders Checkbox -->
+          <div v-if="newShareDoctype === 'Vault Folder' && hasChildFolders" class="pt-2">
+            <div class="flex items-center gap-2">
+              <Checkbox
+                v-model="newShareCascade"
+                label="Apply to all subfolders"
+              />
+            </div>
+            <p class="text-[11px] text-ink-gray-5 mt-1 ml-6 leading-tight">
+              If checked, recipients will automatically get access to any subfolders inside these folders.
+            </p>
+          </div>
         </div>
       </template>
       <template #actions>
@@ -508,8 +522,31 @@
 import ViewControlsBar from '../components/ViewControlsBar.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useColumnResize } from '../composables/useColumnResize'
 import RefreshIcon from '../components/RefreshIcon.vue'
-import { Badge, Button, TextInput, FeatherIcon, FormControl, ListView, ListHeader, ListHeaderItem, ListRows, ListRow, ListRowItem, ListSelectBanner, ListFooter, Dialog, Breadcrumbs, toast, TabButtons, Dropdown, Avatar, MultiSelect, Autocomplete } from 'frappe-ui'
+import {
+  Button,
+  ListView,
+  ListRow,
+  ListRowItem,
+  ListRows,
+  ListSelectBanner,
+  ListHeader,
+  ListFooter,
+  Badge,
+  FeatherIcon,
+  Avatar,
+  Dialog,
+  FormControl,
+  Dropdown,
+  TabButtons,
+  MultiSelect,
+  Checkbox,
+  toast,
+  Breadcrumbs,
+  ListHeaderItem,
+  TextInput
+} from 'frappe-ui'
 import { mobileSidebarOpened, useSharedWithMe, useShareSecret, useUnshare, useShareOptions, useSecrets, useFolders, useBulkDeleteShares, useRoleUsers, useUpdateSharePermission, useVaultStats, useSaveRoleMemberPermission } from '../composables/vault'
 import EmptyState from '../components/EmptyState.vue'
 import SecretTypeIcon from '../components/SecretTypeIcon.vue'
@@ -691,6 +728,7 @@ const newShareType = ref('User')
 const newShareRecipient = ref('')
 const newSharePermission = ref('View Only')
 const newShareExpiresOn = ref('')
+const newShareCascade = ref(true)
 const isSharing = ref(false)
 
 // Revoke dialog state
@@ -745,15 +783,21 @@ const filteredList = computed(() => {
   return result
 })
 
-const columns = ref([
-  { label: 'Title', key: 'title', width: '18rem' },
+const defaultColumns = [
   { label: 'Type', key: 'secret_type', width: '8rem' },
   { label: 'Shared By', key: 'shared_by', width: '12rem' },
   { label: 'Shared With', key: 'shared_with', width: '14rem' },
   { label: 'Target Type', key: 'share_type', width: '8rem' },
   { label: 'Permission', key: 'permission_level', width: '10rem' },
   { label: 'Expires On', key: 'expires_on', width: '10rem' }
-])
+]
+
+const baseColumns = computed(() => {
+  const titleCol = { label: 'Title', key: 'title', width: 1 }
+  return [titleCol, ...defaultColumns]
+})
+
+const { columns, handleColumnWidthUpdated } = useColumnResize('manage-shares-column-widths', baseColumns)
 
 const formattedRows = computed(() => {
   return filteredList.value.map(s => {
@@ -848,6 +892,27 @@ const groupedItemOptions = computed(() => {
   }
 })
 
+const hasChildFolders = computed(() => {
+  if (newShareDoctype.value !== 'Vault Folder' || !foldersList.value?.length) return false
+
+  const selected = selectedItems.value.length ? selectedItems.value : (newShareItem.value ? [newShareItem.value] : [])
+  if (!selected.length) return false
+
+  const selectedFolderNames = new Set(
+    selected.map(item => (typeof item === 'object' && item !== null ? (item.value || item.name) : item)).filter(Boolean)
+  )
+
+  if (selectedFolderNames.size === 0) return false
+
+  return foldersList.value.some(f => f.parent_vault_folder && selectedFolderNames.has(f.parent_vault_folder))
+})
+
+watch(newShareDoctype, () => {
+  newShareItem.value = ''
+  selectedItems.value = []
+  newShareCascade.value = true
+})
+
 const userMembers = computed(() => {
   const users = shareOptions.value.users || []
   return users.map(u => ({
@@ -896,6 +961,7 @@ function openShareDialog() {
   selectedRoles.value = []
   newSharePermission.value = 'View Only'
   newShareExpiresOn.value = ''
+  newShareCascade.value = true
   showShareDialog.value = true
 
   secretsResource.fetch()
@@ -932,6 +998,7 @@ async function handleShareSecret() {
             user: email,
             permission_level: newSharePermission.value,
             expires_on: newShareExpiresOn.value || undefined,
+            cascade_permissions: newShareCascade.value ? 1 : 0,
           })
         }
       }
@@ -946,6 +1013,7 @@ async function handleShareSecret() {
             frappe_role: role,
             permission_level: newSharePermission.value,
             expires_on: newShareExpiresOn.value || undefined,
+            cascade_permissions: newShareCascade.value ? 1 : 0,
           })
         }
       }
