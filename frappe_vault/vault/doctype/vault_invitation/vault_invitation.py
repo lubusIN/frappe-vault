@@ -102,7 +102,7 @@ class VaultInvitation(Document):
                 )
             raise
 
-    @frappe.whitelist(allow_guest=True)  # nosemgrep
+    @frappe.whitelist(methods=["POST"], allow_guest=True)  # nosemgrep
     def accept_invitation(self):
         if self.accept():
             # the invitee was not around to set a password, mail them a link to do it
