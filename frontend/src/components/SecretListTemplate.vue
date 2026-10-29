@@ -571,19 +571,9 @@ async function handleDeleteSecret() {
       stats.reload()
 
       if (res.skipped > 0) {
-        toast({
-          title: 'Partial Success',
-          text: `Deleted ${res.deleted} secret(s), but skipped ${res.skipped} due to insufficient permissions.`,
-          icon: 'lucide-alert-circle',
-          iconClasses: 'text-orange-500'
-        })
+        toast.warning(`Deleted ${res.deleted} secret(s), but skipped ${res.skipped} due to insufficient permissions.`)
       } else {
-        toast({
-          title: 'Success',
-          text: `Deleted ${res.deleted} secret(s)`,
-          icon: 'lucide-check',
-          iconClasses: 'text-green-500'
-        })
+        toast.success(`Deleted ${res.deleted} secret(s)`)
       }
     } else if (res && res.skipped > 0 && res.deleted === 0) {
       deleteError.value = `You don't have permission to delete the selected secret(s). Only the owner or someone with Full Control access can delete.`
@@ -601,12 +591,7 @@ async function handleToggleBookmark(secret) {
     await toggleBook.submit({
       name: secret.name
     })
-    toast({
-      title: 'Success',
-      text: isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks',
-      icon: 'lucide-check',
-      iconClasses: 'text-green-500'
-    })
+    toast.success(isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks')
     secrets.reload()
   } catch (err) {
   }

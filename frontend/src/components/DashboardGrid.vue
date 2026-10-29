@@ -9,7 +9,9 @@
       :row-height="42"
       :is-draggable="editing"
       :is-resizable="editing"
-      :responsive="false"
+      :responsive="true"
+      :breakpoints="{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }"
+      :cols="{ lg: 20, md: 20, sm: 10, xs: 5, xxs: 5 }"
     >
       <template #item="{ item: gridItem }">
         <div class="group/card relative flex h-full w-full p-2 text-ink-gray-8">
@@ -17,7 +19,7 @@
             class="flex h-full w-full items-center justify-center"
             :class="
               editing
-                ? 'pointer-events-none [&>div:first-child]:rounded [&>div:first-child]:group-hover/card:ring-2 [&>div:first-child]:group-hover/card:ring-outline-gray-2'
+                ? 'pointer-events-none [&>div:first-child]:rounded-2xl [&>div:first-child]:group-hover/card:ring-2 [&>div:first-child]:group-hover/card:ring-outline-gray-2'
                 : ''
             "
           >
@@ -50,7 +52,7 @@ import { computed } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
 import DashboardItem from './DashboardItem.vue'
 
-defineProps({
+const props = defineProps({
   editing: { type: Boolean, default: false },
 })
 
@@ -61,6 +63,7 @@ const layout = computed({
     return items.value.map((item) => item.layout)
   },
   set(newLayout) {
+    if (!props.editing || !Array.isArray(newLayout)) return
     newLayout.forEach((l) => {
       const found = items.value.find((item) => item.layout.i === l.i)
       if (found) {
