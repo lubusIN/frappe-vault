@@ -12,6 +12,7 @@
           :subtitle="sidebarConfig.header.subtitle"
           :logo="sidebarConfig.header.logo"
           :menu-items="sidebarConfig.header.menuItems"
+          class="vault-sidebar-header"
         />
 
         <div class="flex-1 overflow-y-auto overflow-x-hidden px-2 -mx-2">

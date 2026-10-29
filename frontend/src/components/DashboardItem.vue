@@ -4,7 +4,7 @@
     <div
       v-if="item.type == 'number_chart'"
       @click="handleStatClick(item.name)"
-      class="flex h-full w-full rounded-2xl bg-surface-elevation-1 border border-outline-gray-1 overflow-hidden p-4 items-center justify-between group/stat shadow-none cursor-pointer hover:border-outline-gray-2 transition-colors"
+      class="flex h-full w-full rounded-xl bg-surface-elevation-1 border border-outline-gray-1 overflow-hidden p-4 items-center justify-between group/stat shadow-none cursor-pointer hover:border-outline-gray-2 transition-colors"
     >
       <Tooltip v-if="item.data" :text="item.data.tooltip" class="flex-1">
         <div class="flex items-center justify-between w-full">
@@ -20,7 +20,7 @@
               />
             </div>
           </div>
-          <div class="size-9 rounded-full bg-surface-gray-2 text-ink-gray-6 group-hover/stat:text-ink-gray-9 flex items-center justify-center transition-colors shrink-0">
+          <div class="p-2.5 rounded-lg bg-surface-gray-2 text-ink-gray-6 group-hover/stat:text-ink-gray-9 transition-colors shrink-0 flex items-center justify-center">
             <span :class="getStatIconClass(item.name)" class="w-4.5 h-4.5" aria-hidden="true" />
           </div>
         </div>
@@ -31,7 +31,7 @@
     <!-- Security Score Widget -->
     <div
       v-else-if="item.type == 'security_score'"
-      class="h-full w-full rounded-2xl bg-surface-elevation-1 border border-outline-gray-1 p-4 flex flex-col justify-between overflow-hidden shadow-none"
+      class="h-full w-full rounded-xl bg-surface-elevation-1 border border-outline-gray-1 p-4 flex flex-col justify-between overflow-hidden shadow-none"
     >
       <div class="flex items-center justify-between mb-2">
         <h2 class="text-xs font-medium text-ink-gray-5">Security Score</h2>
@@ -69,7 +69,7 @@
     <!-- Recently Accessed Widget -->
     <div
       v-else-if="item.type == 'recently_accessed'"
-      class="h-full w-full rounded-2xl bg-surface-elevation-1 border border-outline-gray-1 overflow-hidden flex flex-col justify-between shadow-none"
+      class="h-full w-full rounded-xl bg-surface-elevation-1 border border-outline-gray-1 overflow-hidden flex flex-col justify-between shadow-none"
     >
       <div class="px-4 py-3 border-b border-outline-gray-1 flex items-center justify-between shrink-0">
         <h2 class="text-sm font-semibold text-ink-gray-9">Recently Accessed</h2>
@@ -98,7 +98,7 @@
     <!-- Spacer -->
     <div
       v-else-if="item.type == 'spacer'"
-      class="rounded-2xl bg-surface-base h-full overflow-hidden text-ink-gray-5 flex items-center justify-center border border-dashed border-outline-gray-2"
+      class="rounded-xl bg-surface-base h-full overflow-hidden text-ink-gray-5 flex items-center justify-center border border-dashed border-outline-gray-2"
     >
       {{ editing ? 'Spacer' : '' }}
     </div>
@@ -106,7 +106,7 @@
     <!-- Axis Chart (Trends) -->
     <div
       v-else-if="item.type == 'axis_chart'"
-      class="h-full w-full rounded-2xl bg-surface-elevation-1 border border-outline-gray-1 p-4 overflow-hidden shadow-none flex flex-col"
+      class="h-full w-full rounded-xl bg-surface-elevation-1 border border-outline-gray-1 p-4 overflow-hidden shadow-none flex flex-col"
     >
       <div class="flex-1 min-h-[180px] w-full">
         <LineChart
@@ -126,7 +126,7 @@
     <!-- Donut Chart (Secrets by Folder) -->
     <div
       v-else-if="item.type == 'donut_chart'"
-      class="h-full w-full rounded-2xl bg-surface-elevation-1 border border-outline-gray-1 p-4 overflow-hidden shadow-none flex flex-col justify-between"
+      class="h-full w-full rounded-xl bg-surface-elevation-1 border border-outline-gray-1 p-4 overflow-hidden shadow-none flex flex-col justify-between"
     >
       <div class="flex-1 min-h-[180px] w-full flex items-center justify-center relative overflow-hidden">
         <DonutChart

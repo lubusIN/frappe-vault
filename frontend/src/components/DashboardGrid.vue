@@ -19,7 +19,7 @@
             class="flex h-full w-full items-center justify-center"
             :class="
               editing
-                ? 'pointer-events-none [&>div:first-child]:rounded-2xl [&>div:first-child]:group-hover/card:ring-2 [&>div:first-child]:group-hover/card:ring-outline-gray-2'
+                ? 'pointer-events-none [&>div:first-child]:rounded-xl [&>div:first-child]:group-hover/card:ring-2 [&>div:first-child]:group-hover/card:ring-outline-gray-2'
                 : ''
             "
           >

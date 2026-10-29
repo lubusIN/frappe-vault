@@ -92,6 +92,15 @@
   z-index: 200 !important;
 }
 
+.vault-sidebar[data-state="collapsed"] .vault-sidebar-header > *,
+.vault-sidebar[data-state="collapsed"] [data-slot="sidebar-header"] > * {
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
 /* Fix IconPicker icons in dark mode */
 [data-theme="dark"] [data-reka-popper-content-wrapper] button svg,
 [data-theme="dark"] [data-headlessui-state="open"] button svg {
