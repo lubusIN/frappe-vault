@@ -14,7 +14,7 @@
         <Breadcrumbs :items="breadcrumbs" class="min-w-0" />
       </div>
       <div class="flex items-center gap-2">
-        <Button v-if="showCreateButton" variant="solid" iconLeft="plus" label="Create" @click="showNewDialog = true" />
+        <Button v-if="showCreateButton" variant="solid" iconLeft="lucide-plus" label="Create" @click="showNewDialog = true" />
       </div>
     </header>
 
@@ -87,7 +87,7 @@
         <!-- More Options -->
         <Dropdown v-if="showCreateButton" :options="moreOptions">
           <template #default>
-            <Button :tooltip="'More Options'" icon="more-horizontal" />
+            <Button :tooltip="'More Options'" icon="lucide-more-horizontal" />
           </template>
         </Dropdown>
       </div>
@@ -146,7 +146,7 @@
                   <!-- Folder column -->
                   <div v-else-if="column.key === 'folder'" class="flex items-center gap-1.5 text-base text-ink-gray-9">
                     <template v-if="item">
-                      <FeatherIcon :name="row.folder_icon || getFolderIcon(item, foldersResource.data)" class="w-3.5 h-3.5 text-ink-gray-5 shrink-0" />
+                      <Icon :name="(row.folder_icon || getFolderIcon(item, foldersResource.data)).replace(/^lucide-/, '')" class="w-3.5 h-3.5 text-ink-gray-5 shrink-0" />
                       <span class="truncate">{{ item }}</span>
                     </template>
                     <span class="text-base text-ink-gray-4" v-else>—</span>
@@ -163,14 +163,23 @@
                   <div v-else-if="column.key === '_actions'" class="flex items-center justify-end gap-1.5" @click.stop>
                     <Button
                       variant="ghost"
-                      class="!p-1.5 h-auto text-ink-gray-5 hover:text-ink-gray-9"
+                      class="!p-1.5 h-auto hover:bg-surface-gray-2"
                       @click.stop="handleToggleBookmark(row)"
                     >
-                      <FeatherIcon
-                        name="bookmark"
-                        class="w-4 h-4"
-                        :class="row.is_bookmark ? 'text-ink-yellow-6 fill-current' : 'text-ink-gray-4'"
-                      />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        class="size-4 transition-colors"
+                        :class="row.is_bookmark ? 'text-red-500 fill-red-500' : 'text-ink-gray-4 fill-none stroke-current stroke-2'"
+                        stroke="currentColor"
+                        :fill="row.is_bookmark ? 'currentColor' : 'none'"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+                      </svg>
                     </Button>
                   </div>
 
@@ -186,7 +195,7 @@
                 v-if="allowDelete"
                 variant="solid"
                 theme="red"
-                iconLeft="trash-2"
+                iconLeft="lucide-trash-2"
                 label="Delete"
                 @click="showDeleteDialog = true"
               />
@@ -272,7 +281,11 @@ import {
   Dialog,
   TextInput,
   Dropdown,
-  FeatherIcon,
+  Breadcrumbs,
+  Select,
+  toast
+} from 'frappe-ui'
+import {
   ListView,
   ListHeader,
   ListHeaderItem,
@@ -280,11 +293,8 @@ import {
   ListRow,
   ListRowItem,
   ListSelectBanner,
-  ListFooter,
-  Breadcrumbs,
-  Select,
-  toast
-} from 'frappe-ui'
+  ListFooter
+} from 'frappe-ui/experimental'
 import {
   mobileSidebarOpened,
   useSecrets,
@@ -449,12 +459,12 @@ const moreOptions = computed(() => {
       items: [
         {
           label: 'Create Secret',
-          icon: 'plus',
+          icon: 'lucide-plus',
           onClick: () => { showNewDialog.value = true }
         },
         {
           label: 'Refresh List',
-          icon: 'refresh-cw',
+          icon: 'lucide-refresh-cw',
           onClick: () => { refreshSecrets() }
         }
       ]
@@ -564,14 +574,14 @@ async function handleDeleteSecret() {
         toast({
           title: 'Partial Success',
           text: `Deleted ${res.deleted} secret(s), but skipped ${res.skipped} due to insufficient permissions.`,
-          icon: 'alert-circle',
+          icon: 'lucide-alert-circle',
           iconClasses: 'text-orange-500'
         })
       } else {
         toast({
           title: 'Success',
           text: `Deleted ${res.deleted} secret(s)`,
-          icon: 'check',
+          icon: 'lucide-check',
           iconClasses: 'text-green-500'
         })
       }
@@ -594,7 +604,7 @@ async function handleToggleBookmark(secret) {
     toast({
       title: 'Success',
       text: isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks',
-      icon: 'check',
+      icon: 'lucide-check',
       iconClasses: 'text-green-500'
     })
     secrets.reload()
