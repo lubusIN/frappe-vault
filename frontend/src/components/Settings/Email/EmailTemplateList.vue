@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full p-4 rounded-r-lg">
     <!-- List View -->
     <template v-if="currentView === 'list'">
-      <div class="flex items-center justify-between px-4 py-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3">
         <div>
           <h2 class="text-xl font-semibold text-ink-gray-9 mb-1">Email Templates</h2>
           <p class="text-sm text-ink-gray-5">Manage your email templates for outgoing emails.</p>

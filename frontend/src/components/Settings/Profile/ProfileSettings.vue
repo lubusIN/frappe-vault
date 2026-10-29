@@ -80,7 +80,7 @@
           Account Info & Security
         </h3>
 
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium text-ink-gray-8">
               Password
