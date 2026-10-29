@@ -1,13 +1,11 @@
 <template>
   <Dialog
     :modelValue="modelValue"
-    :options="{
-      title: dialogTitle,
-      size: 'lg',
-    }"
+    :title="dialogTitle"
+    size="lg"
     @update:modelValue="val => emit('update:modelValue', val)"
   >
-    <template #body-content>
+    <template #default>
       <div class="flex flex-col gap-4 py-1">
         <!-- Target Type Selection: TabButtons -->
         <div class="space-y-1.5">
@@ -48,7 +46,7 @@
                   +{{ overflowUserCount }}
                 </span>
               </div>
-              <FeatherIcon v-else name="users" class="w-4 h-4 text-ink-gray-5" />
+              <span v-else class="lucide-users w-4 h-4 text-ink-gray-5" aria-hidden="true" />
             </template>
 
             <template #summary="{ selectedOptions, summary }">
@@ -96,7 +94,7 @@
                   +{{ overflowRoleCount }}
                 </span>
               </div>
-              <FeatherIcon v-else name="shield" class="w-4 h-4 text-ink-gray-5" />
+              <span v-else class="lucide-shield w-4 h-4 text-ink-gray-5" aria-hidden="true" />
             </template>
 
             <template #summary="{ selectedOptions, summary }">
@@ -166,7 +164,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Dialog, Button, Avatar, FeatherIcon, FormControl, MultiSelect, TabButtons, Checkbox, toast } from 'frappe-ui'
+import { Dialog, Button, Avatar, FormControl, MultiSelect, TabButtons, Checkbox, toast } from 'frappe-ui'
 import { useShareOptions, useShareSecret, useFolders } from '../composables/vault'
 
 const props = defineProps({

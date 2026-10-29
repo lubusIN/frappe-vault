@@ -1,9 +1,10 @@
 <template>
   <Dialog
     v-model="isOpen"
-    :options="{ title: 'Change Password', size: 'sm' }"
+    title="Change Password"
+    size="sm"
   >
-    <template #body-content>
+    <template #default>
       <form class="space-y-4" @submit.prevent="savePassword">
         <FormControl
           label="Old Password"

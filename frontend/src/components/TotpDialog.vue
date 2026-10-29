@@ -1,13 +1,11 @@
 <template>
   <Dialog
     v-model="modelValue"
-    :options="{
-      title: 'TOTP Code (2FA)',
-      size: 'sm'
-    }"
+    title="TOTP Code (2FA)"
+    size="sm"
     @update:modelValue="handleDialogClose"
   >
-    <template #body-content>
+    <template #default>
       <div class="p-4 flex flex-col items-center justify-center space-y-6">
 
         <div v-if="isInitialLoading" class="py-8 flex items-center justify-center">

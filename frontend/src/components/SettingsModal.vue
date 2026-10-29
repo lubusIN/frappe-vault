@@ -1,10 +1,11 @@
 <template>
   <Dialog
     v-model="isOpen"
-    :size="'5xl'"
+    size="5xl"
+    bare
     @close="activeSettingsPage = ''"
   >
-    <template #body>
+    <template #default>
       <div class="flex h-[calc(100vh_-_8rem)] bg-surface-gray-1">
         <div class="flex flex-col m-1 rounded-l-lg w-56 shrink-0 bg-surface-gray-1 overflow-y-auto">
           <template v-for="(tab, i) in tabs" :key="tab.label">
@@ -24,8 +25,7 @@
               >
                 <template #prefix>
                   <component :is="item.icon" class="size-4 text-ink-gray-7" v-if="typeof item.icon === 'object'" />
-                  <span v-else-if="typeof item.icon === 'string' && item.icon.startsWith('lucide-')" :class="[item.icon, 'size-4 text-ink-gray-7']" />
-                  <FeatherIcon v-else :name="item.icon" class="size-4 text-ink-gray-7" />
+                  <span v-else-if="typeof item.icon === 'string'" :class="[item.icon.startsWith('lucide-') ? item.icon : 'lucide-' + item.icon, 'size-4 text-ink-gray-7']" aria-hidden="true" />
                 </template>
               </SidebarItem>
             </nav>
@@ -41,7 +41,7 @@
 
 <script setup>
 import { computed, ref, markRaw } from 'vue'
-import { Dialog, SidebarItem, FeatherIcon } from 'frappe-ui'
+import { Dialog, SidebarItem } from 'frappe-ui'
 import ProfileSettings from './Settings/Profile/ProfileSettings.vue'
 import PreferencesSettings from './Settings/Preferences/PreferencesSettings.vue'
 import EmailAccountList from './Settings/Email/EmailAccountList.vue'

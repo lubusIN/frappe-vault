@@ -1,6 +1,6 @@
 <template>
-  <Dialog v-model="show" :options="{ title: 'Add Secret', size: 'lg' }">
-    <template #body-content>
+  <Dialog v-model="show" title="Add Secret" size="lg">
+    <template #default>
       <div class="space-y-4">
         <FormControl label="Title" v-model="form.title" :required="true" placeholder="e.g. Gmail, AWS Console, Passport Scan" />
 
@@ -8,19 +8,19 @@
 
         <div>
           <label class="block text-xs font-medium text-ink-gray-7 mb-1.5">Folder</label>
-          <Autocomplete
-            v-model="selectedFolder"
+          <Combobox
+            v-model="form.folder"
             :options="folderOptions"
             placeholder="Select a folder..."
           >
-            <template #item-prefix="{ option }">
-              <div :style="{ paddingLeft: (option.level * 1.5) + 'rem' }" class="flex items-center">
-                <Icon name="corner-down-right" class="w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="option.level > 0" />
-                <Icon name="folder" class="w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="option.value !== ''" />
-                <div class="w-4 h-4 mr-2 shrink-0" v-else></div>
+            <template #item-prefix="{ item }">
+              <div :style="{ paddingLeft: (item.level * 1.5) + 'rem' }" class="flex items-center">
+                <span class="lucide-corner-down-right size-4 mr-2 text-ink-gray-4 shrink-0" v-if="item.level > 0" aria-hidden="true" />
+                <span class="lucide-folder size-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="item.value !== ''" aria-hidden="true" />
+                <div class="size-4 mr-2 shrink-0" v-else></div>
               </div>
             </template>
-          </Autocomplete>
+          </Combobox>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -43,7 +43,7 @@
                       class="w-10 h-10 object-cover rounded-lg shrink-0 border border-outline-gray-1 bg-surface-base"
                     />
                     <div v-else class="w-10 h-10 rounded-lg bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center shrink-0">
-                      <FeatherIcon name="paperclip" class="w-5 h-5 text-ink-gray-7" />
+                      <span class="lucide-paperclip w-5 h-5 text-ink-gray-7" aria-hidden="true" />
                     </div>
                     <div class="min-w-0">
                       <p class="text-xs font-semibold text-ink-gray-9 truncate">{{ getFileName(fileUrl) }}</p>
@@ -54,7 +54,7 @@
                   <Button
                     variant="ghost"
                     size="xs"
-                    icon="x"
+                    icon="lucide-x"
                     class="!p-1 h-auto text-ink-gray-5 hover:text-ink-red-3 hover:bg-surface-gray-3 focus:outline-none"
                     title="Remove File"
                     @click.stop.prevent="removeAttachment(idx)"
@@ -76,7 +76,7 @@
                   @change="handleFileUpload($event)"
                 />
                 <div class="flex flex-col items-center gap-1">
-                  <FeatherIcon name="paperclip" class="w-6 h-6 text-ink-gray-5" />
+                  <span class="lucide-paperclip w-6 h-6 text-ink-gray-5" aria-hidden="true" />
                   <span class="text-xs font-semibold text-ink-gray-8">
                     {{ uploadingFiles ? 'Uploading files...' : (attachmentList.length > 0 ? '+ Add More Files' : 'Click or drag files here to upload') }}
                   </span>
@@ -113,8 +113,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Dialog, FormControl, Button, FeatherIcon, toast, Autocomplete } from 'frappe-ui'
-import { Icon } from 'frappe-ui/icons'
+import { Dialog, FormControl, Button, toast, Combobox } from 'frappe-ui'
 import { SECRET_TYPES } from '../composables/constants'
 import { secretFieldsConfig } from '../composables/secretFields'
 import { useFolders, useCreateSecret } from '../composables/vault'

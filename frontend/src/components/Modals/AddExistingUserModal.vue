@@ -1,14 +1,12 @@
 <template>
   <Dialog
     v-model="isOpen"
-    :options="{
-      title: 'Add Existing User',
-    }"
+    title="Add Existing User"
   >
-    <template #body-content>
+    <template #default>
       <div class="flex flex-col gap-4">
         <div class="flex items-start gap-2 p-3 bg-surface-gray-2 border border-outline-gray-3 rounded-lg text-sm text-ink-gray-7">
-          <FeatherIcon name="info" class="w-4 h-4 mt-0.5 shrink-0" />
+          <span class="lucide-info w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
           <p>Add existing system users to this Vault. Assign them a role to grant access with their current credentials.</p>
         </div>
 
@@ -73,7 +71,6 @@ import {
   Dialog,
   Button,
   FormControl,
-  FeatherIcon,
   Avatar
 } from 'frappe-ui'
 

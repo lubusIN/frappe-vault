@@ -99,8 +99,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import { Button, TextInput, Select, TextEditor, Checkbox, Switch, createResource, toast } from 'frappe-ui'
+import { Button, TextInput, Select, Checkbox, Switch, createResource, toast } from 'frappe-ui'
+import { TextEditor } from 'frappe-ui/experimental'
 
 const props = defineProps({
   templateId: {

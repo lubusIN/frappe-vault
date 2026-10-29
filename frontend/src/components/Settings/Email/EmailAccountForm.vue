@@ -27,7 +27,7 @@
 
         <!-- Dynamic Warning Info Alert -->
         <div v-if="currentProvider?.helpLink" class="flex items-start gap-2 p-3 mb-6 bg-surface-gray-2 border border-outline-gray-3 rounded-lg text-sm text-ink-gray-7">
-          <FeatherIcon name="info" class="w-4 h-4 mt-0.5 shrink-0 text-ink-gray-5" />
+          <span class="lucide-info w-4 h-4 mt-0.5 shrink-0 text-ink-gray-5" aria-hidden="true" />
           <span>{{ currentProvider.infoPrefix }} <a :href="currentProvider.helpLink" target="_blank" class="text-ink-blue-5 hover:underline">here</a>.</span>
         </div>
 
@@ -149,7 +149,7 @@
 
 <script setup>
 import { ref, onMounted, computed, reactive } from 'vue'
-import { Button, FormControl, FeatherIcon, createResource, toast } from 'frappe-ui'
+import { Button, FormControl, createResource, toast } from 'frappe-ui'
 
 import gmailIcon from '../../../../public/images/gmail.png'
 import outlookIcon from '../../../../public/images/outlook.png'

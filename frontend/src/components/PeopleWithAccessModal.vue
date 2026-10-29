@@ -1,17 +1,15 @@
 <template>
   <Dialog
     :modelValue="modelValue"
-    :options="{
-      title: dialogTitle,
-      size: 'lg'
-    }"
+    :title="dialogTitle"
+    size="lg"
     @update:modelValue="val => emit('update:modelValue', val)"
   >
-    <template #body-content>
+    <template #default>
       <div class="flex flex-col gap-4 py-1">
         <!-- Read-Only Banner for Revoked Shares -->
         <div v-if="isShareRevoked" class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-gray-2 border border-outline-gray-1 text-ink-gray-9 font-medium text-xs">
-          <FeatherIcon name="alert-circle" class="w-4 h-4 text-ink-gray-7 shrink-0" />
+          <span class="lucide-alert-circle w-4 h-4 text-ink-gray-7 shrink-0" aria-hidden="true" />
           <span>This share has been revoked. Member access details are read-only.</span>
         </div>
 
@@ -19,7 +17,7 @@
           v-model="searchQuery"
           type="text"
           placeholder="Search members by name or email…"
-          iconLeft="search"
+          iconLeft="lucide-search"
           class="w-full"
         />
 
@@ -36,7 +34,7 @@
             </div>
 
             <div v-if="roleUsersResource.loading" class="py-6 flex flex-col items-center justify-center space-y-2">
-              <FeatherIcon name="loader" class="w-5 h-5 animate-spin text-ink-gray-5" />
+              <span class="lucide-loader w-5 h-5 animate-spin text-ink-gray-5" aria-hidden="true" />
               <span class="text-xs text-ink-gray-5">Loading members...</span>
             </div>
 
@@ -177,7 +175,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Dialog, TextInput, Badge, Avatar, FormControl, Dropdown, Button, FeatherIcon, toast } from 'frappe-ui'
+import { Dialog, TextInput, Badge, Avatar, FormControl, Dropdown, Button, toast } from 'frappe-ui'
 import { useRoleUsers, useSaveRoleMemberPermission } from '../composables/vault'
 
 const props = defineProps({
