@@ -7,6 +7,7 @@ build/
 *.egg
 scratch/
 .agents/
+frappe-semgrep-rules/
 ARCHITECTURE.md
 
 # Node / Frontend build artifacts
