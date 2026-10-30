@@ -631,9 +631,9 @@ function parseFrappeError(error) {
 }
 
 
-const newFolderParent = ref(null)
+const newFolderParent = ref('')
 const isSubfolderMode = ref(false)
-const editFolderParent = ref(null)
+const editFolderParent = ref('')
 
 const folderOptions = computed(() => {
   const options = []
@@ -658,17 +658,21 @@ const writableFolderOptions = computed(() => {
 })
 
 const editFolderParentOptions = computed(() => {
-  return writableFolderOptions.value.filter(o => o.value === '' || (o.value !== folderToEdit.value?.name && !o.value.startsWith(folderToEdit.value?.name)))
+  if (!folderToEdit.value) return writableFolderOptions.value
+  const forbidden = new Set([folderToEdit.value.name, ...getAllDescendants(folderToEdit.value).map(d => d.name)])
+  return writableFolderOptions.value.filter(o => o.value === '' || !forbidden.has(o.value))
 })
 
 const deleteFolderTargetOptions = computed(() => {
-  return writableFolderOptions.value.filter(o => o.value === '' || (o.value !== folderToDelete.value?.name && !o.value.startsWith(folderToDelete.value?.name)))
+  if (!folderToDelete.value) return writableFolderOptions.value
+  const forbidden = new Set([folderToDelete.value.name, ...getAllDescendants(folderToDelete.value).map(d => d.name)])
+  return writableFolderOptions.value.filter(o => o.value === '' || !forbidden.has(o.value))
 })
 
 function openCreateFolderDialog(parent = null) {
   newFolderName.value = ''
   newFolderIcon.value = ''
-  newFolderParent.value = parent ? { label: parent.folder_name, value: parent.name } : null
+  newFolderParent.value = parent ? parent.name : ''
   isSubfolderMode.value = !!parent
   showCreateFolderDialog.value = true
 }
@@ -676,10 +680,14 @@ function openCreateFolderDialog(parent = null) {
 async function handleCreateFolder() {
   if (!newFolderName.value.trim()) return
   try {
+    const parentVal = typeof newFolderParent.value === 'object'
+      ? (newFolderParent.value?.value || '')
+      : (newFolderParent.value || '')
+
     await createFolderResource.submit({
       folder_name: newFolderName.value.trim(),
       icon: newFolderIcon.value || 'folder',
-      parent_vault_folder: newFolderParent.value?.value || '',
+      parent_vault_folder: parentVal,
       is_group: 0
     })
     showCreateFolderDialog.value = false
@@ -750,8 +758,7 @@ function getFolderOptions(folder) {
         folderToEdit.value = folder
         editFolderName.value = folder.folder_name
         editFolderIcon.value = folder.icon || ''
-        const parentOpt = folderOptions.value.find(o => o.value === folder.parent_vault_folder)
-        editFolderParent.value = parentOpt || null
+        editFolderParent.value = folder.parent_vault_folder || ''
         showEditFolderDialog.value = true
       }
     })
@@ -771,7 +778,7 @@ function openDeleteFolderDialog(folder) {
   deleteSecretsCount.value = 0
   loadingCount.value = true
   deleteSubfolderAction.value = 'move_up'
-  deleteTargetFolder.value = null
+  deleteTargetFolder.value = ''
   showDeleteFolderDialog.value = true
 
   folderSecretsResource.submit({ folder_name: folder.name }).then((res) => {
@@ -785,11 +792,15 @@ function openDeleteFolderDialog(folder) {
 async function handleEditFolder() {
   if (!editFolderName.value.trim() || !folderToEdit.value) return
   try {
+    const parentVal = typeof editFolderParent.value === 'object'
+      ? (editFolderParent.value?.value || '')
+      : (editFolderParent.value || '')
+
     await updateFolderResource.submit({
       name: folderToEdit.value.name,
       folder_name: editFolderName.value.trim(),
       icon: editFolderIcon.value || 'folder',
-      parent_vault_folder: editFolderParent.value?.value || '',
+      parent_vault_folder: parentVal,
     })
     showEditFolderDialog.value = false
     folderToEdit.value = null
@@ -803,11 +814,15 @@ async function handleDeleteFolder() {
   if (!folderToDelete.value) return
   deleteFolderError.value = ''
   try {
+    const targetVal = typeof deleteTargetFolder.value === 'object'
+      ? (deleteTargetFolder.value?.value || null)
+      : (deleteTargetFolder.value || null)
+
     await deleteFolderResource.submit({
       name: folderToDelete.value.name,
       delete_secrets: deleteSecretsCount.value > 0 && deleteSecretsCheck.value ? 1 : 0,
       subfolder_action: deleteSubfolderAction.value,
-      target_folder: deleteTargetFolder.value?.value || null,
+      target_folder: targetVal,
     })
 
     if (route.query.folder === folderToDelete.value.name || route.name === 'SecretDetail') {

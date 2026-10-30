@@ -175,19 +175,6 @@ const defaultForm = () => ({
 })
 
 const form = ref(defaultForm())
-const selectedFolder = ref(null)
-
-watch(() => form.value.folder, (newFolder) => {
-  if (typeof newFolder === 'string') {
-    selectedFolder.value = folderOptions.value.find(o => o.value === newFolder) || { label: 'None', value: '' }
-  }
-})
-
-watch(selectedFolder, (newVal) => {
-  if (newVal) {
-    form.value.folder = newVal.value
-  }
-})
 const attachmentList = ref([])
 const showSecrets = ref(false)
 const uploadingFiles = ref(false)

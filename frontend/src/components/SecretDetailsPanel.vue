@@ -28,7 +28,7 @@
           <label class="w-28 shrink-0 text-ink-gray-5 font-normal">Folder</label>
           <div class="flex-1 min-w-0">
             <Combobox
-              v-model="selectedFolder"
+              v-model="editForm.folder"
               :options="folderOptions"
               placeholder="Select a folder..."
               class="w-full text-sm cursor-pointer"
@@ -362,20 +362,6 @@ const folderOptions = computed(() => {
   return opts
 })
 
-const selectedFolder = ref(null)
-
-watch(() => editForm.folder, (newFolder) => {
-  if (typeof newFolder === 'string') {
-    selectedFolder.value = folderOptions.value.find(o => o.value === newFolder) || { label: 'No Folder', value: '', level: 0 }
-  }
-})
-
-watch(selectedFolder, (newVal) => {
-  if (newVal) {
-    editForm.folder = newVal.value
-  }
-})
-
 function getFolderName(folderId) {
   if (!folderId) return ''
   const found = folders.data?.find(f => f.name === folderId)
@@ -506,7 +492,6 @@ async function toggleEditMode() {
     editForm.title = sd.title || ''
     editForm.secret_type = sd.secret_type || 'Password'
     editForm.folder = sd.folder || ''
-    selectedFolder.value = folderOptions.value.find(o => o.value === editForm.folder) || { label: 'No Folder', value: '', level: 0 }
     editForm.url = sd.url || ''
     editForm.username = sd.username || ''
     editForm.email = sd.email || ''

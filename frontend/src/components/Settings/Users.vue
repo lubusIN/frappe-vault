@@ -107,7 +107,8 @@
               <Dropdown
                 :options="getMoreOptions(user)"
                 :button="{
-                  icon: 'more-horizontal',
+                  icon: 'lucide-more-horizontal',
+                  variant: 'ghost',
                 }"
                 placement="right"
               />
