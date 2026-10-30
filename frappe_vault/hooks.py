@@ -4,7 +4,7 @@ app_publisher = "lubus"
 app_description = "Secure password and secret management application for Frappe."
 app_email = "info@lubus.in"
 app_license = "MIT"
-app_logo_url = "/assets/frappe_vault/images/vault-logo.svg"
+app_logo_url = "/assets/frappe_vault/images/vault-icon.svg"
 app_home = "/vault"
 
 

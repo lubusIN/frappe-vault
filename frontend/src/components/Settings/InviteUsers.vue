@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-full flex-col gap-6 p-6 text-ink-gray-8">
-    <div class="flex px-2 justify-between">
-      <div class="flex flex-col gap-1 w-9/12">
+    <div class="flex flex-col sm:flex-row justify-between gap-3 px-2">
+      <div class="flex flex-col gap-1 w-full sm:w-9/12">
         <h2 class="flex gap-2 text-2xl-semibold leading-none h-5">
           Send Invites
         </h2>
@@ -9,7 +9,7 @@
           Invite users to access Vault. Specify their roles to control access and permissions
         </p>
       </div>
-      <div class="flex item-center space-x-2 w-3/12 justify-end">
+      <div class="flex items-center space-x-2 w-full sm:w-3/12 justify-start sm:justify-end">
         <Button
           label="Send Invites"
           variant="solid"

@@ -1,14 +1,14 @@
 <template>
   <!-- No active sorts: field picker button opens directly -->
-  <Popover v-if="!sortEntries.length" placement="bottom-end">
-    <template #target="{ togglePopover }">
-      <Button label="Sort" @click="togglePopover()">
+  <Popover v-if="!sortEntries.length" side="bottom" align="end" :bare="true">
+    <template #trigger>
+      <Button label="Sort">
         <template #prefix>
           <SortIcon class="h-4" />
         </template>
       </Button>
     </template>
-    <template #body="{ close }">
+    <template #default="{ close }">
       <div class="my-1 max-h-64 min-w-44 overflow-y-auto rounded-lg bg-surface-elevation-2 p-1.5 shadow-2xl ring-1 ring-black ring-opacity-5">
         <div class="mb-1 px-1">
           <FormControl
@@ -34,9 +34,9 @@
   </Popover>
 
   <!-- Active sorts: full popover panel -->
-  <Popover v-else placement="bottom-end">
-    <template #target="{ togglePopover }">
-      <div class="flex items-center">
+  <Popover v-else side="bottom" align="end" :bare="true">
+    <template #trigger>
+      <div class="flex items-center cursor-pointer">
         <!-- Single sort: direction toggle + field label -->
         <template v-if="sortEntries.length === 1">
           <Button
@@ -47,15 +47,11 @@
           <Button
             :label="getSortLabel(sortEntries[0])"
             class="shrink-0 rounded-l-none"
-            @click.stop="togglePopover"
           />
         </template>
         <!-- Multiple sorts: icon + label + count -->
         <template v-else>
-          <Button
-            label="Sort"
-            @click="togglePopover"
-          >
+          <Button label="Sort">
             <template #prefix>
               <SortIcon class="h-4" />
             </template>
@@ -70,7 +66,7 @@
         </template>
       </div>
     </template>
-    <template #body="{ close }">
+    <template #default="{ close }">
       <div
         class="my-2 min-w-40 rounded-lg bg-surface-elevation-2 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
       >
@@ -97,7 +93,7 @@
                   @update:modelValue="(val) => updateSortField(val, i)"
                 />
               </div>
-              <Button variant="ghost" icon="x" @click="removeSort(i)" />
+              <Button variant="ghost" icon="lucide-x" @click="removeSort(i)" />
             </div>
           </div>
           <div
@@ -112,7 +108,7 @@
               class="!text-ink-gray-5"
               variant="ghost"
               label="Add Sort"
-              iconLeft="plus"
+              iconLeft="lucide-plus"
               @click="isAddingSort = true"
             />
             <Button
@@ -126,7 +122,7 @@
           <div v-else class="mt-1 border-t border-outline-gray-2 pt-2">
             <div class="flex items-center justify-between gap-2 mb-2">
               <span class="text-sm font-medium text-ink-gray-7 pl-1">Select Field</span>
-              <Button variant="ghost" icon="x" class="!h-6 !w-6 !p-1 text-ink-gray-5" @click="isAddingSort = false; fieldSearch = ''" />
+              <Button variant="ghost" icon="lucide-x" class="!h-6 !w-6 !p-1 text-ink-gray-5" @click="isAddingSort = false; fieldSearch = ''" />
             </div>
             <FormControl
               v-model="fieldSearch"

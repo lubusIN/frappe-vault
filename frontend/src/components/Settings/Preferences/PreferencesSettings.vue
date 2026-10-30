@@ -21,5 +21,5 @@
 </template>
 
 <script setup>
-import { ThemeSwitcher } from 'frappe-ui'
+import { ThemeSwitcher } from 'frappe-ui/experimental'
 </script>

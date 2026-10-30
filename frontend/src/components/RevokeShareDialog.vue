@@ -1,13 +1,11 @@
 <template>
   <Dialog
     :modelValue="modelValue"
-    :options="{
-      title: 'Revoke Share Access',
-      size: 'sm',
-    }"
+    title="Revoke Share Access"
+    size="sm"
     @update:modelValue="val => emit('update:modelValue', val)"
   >
-    <template #body-content>
+    <template #default>
       <div class="pt-2">
         <p class="text-sm text-ink-gray-7">
           Are you sure you want to revoke share access for

@@ -100,7 +100,7 @@
         v-else
         class="flex flex-1 flex-col items-center justify-center p-6 text-center"
       >
-        <FeatherIcon name="bell-off" class="size-8 text-ink-gray-4 mb-3" />
+        <span class="lucide-bell-off size-8 text-ink-gray-4 mb-3" aria-hidden="true" />
         <p class="text-sm font-medium text-ink-gray-9">No New Notifications</p>
         <p class="text-xs text-ink-gray-5 mt-1">You have no new notifications</p>
       </div>
@@ -111,7 +111,7 @@
 <script setup>
 import { ref, computed, getCurrentInstance, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { Button, FeatherIcon } from 'frappe-ui'
+import { Button } from 'frappe-ui'
 import { onClickOutside, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { isSidebarCollapsed } from '../composables/vault'
 import {

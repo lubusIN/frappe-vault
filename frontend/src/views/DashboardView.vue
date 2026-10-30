@@ -31,7 +31,7 @@
           />
           <Button
             variant="solid"
-            iconLeft="plus"
+            iconLeft="lucide-plus"
             label="Add Secret"
             @click="showAddSecretModal = true"
           />
@@ -41,7 +41,7 @@
         <template v-else>
           <Button
             label="Chart"
-            iconLeft="plus"
+            iconLeft="lucide-plus"
             @click="showAddChartModal = true"
           />
           <Button
@@ -72,8 +72,8 @@
           label: preset,
           class: '!w-full justify-between [&>svg]:text-ink-gray-5',
           variant: 'outline',
-          iconRight: 'chevron-down',
-          iconLeft: 'calendar',
+          iconRight: 'lucide-chevron-down',
+          iconLeft: 'lucide-calendar',
         }"
       />
 
@@ -81,7 +81,7 @@
         v-else
         ref="datePickerRef"
         class="!w-64"
-        :value="filters.period"
+        v-model="filters.period"
         variant="outline"
         placeholder="Select Period"
         :formatter="formatRange"
@@ -99,18 +99,24 @@
         "
       >
         <template #prefix>
-          <FeatherIcon name="calendar" class="w-4 h-4 text-ink-gray-5 mr-2" />
+          <span class="lucide-calendar w-4 h-4 text-ink-gray-5 mr-2" aria-hidden="true" />
         </template>
       </DateRangePicker>
     </div>
 
     <!-- Dashboard Content Area -->
     <div class="flex-1 overflow-y-auto custom-scrollbar">
+      <div v-if="dashboardItems.loading" class="flex h-64 items-center justify-center">
+        <LoadingIndicator class="w-8 h-8 text-ink-gray-5" />
+      </div>
       <DashboardGrid
-        v-if="!dashboardItems.loading && dashboardItems.data"
+        v-else-if="dashboardItems.data && dashboardItems.data.length"
         v-model="dashboardItems.data"
         :editing="editing"
       />
+      <div v-else class="flex h-full items-center justify-center p-6">
+        <EmptyState icon="layout-dashboard" title="No dashboard items" description="Add charts to customize your vault dashboard" />
+      </div>
     </div>
 
     <!-- Modals -->
@@ -135,13 +141,14 @@ import {
   Button,
   Dropdown,
   DateRangePicker,
-  FeatherIcon,
+  LoadingIndicator,
   dayjs
 } from 'frappe-ui'
 import { useSecurityScore, mobileSidebarOpened } from '../composables/vault'
 import DashboardGrid from '../components/DashboardGrid.vue'
 import AddChartModal from '../components/AddChartModal.vue'
 import NewSecretDialog from '../components/NewSecretDialog.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const router = useRouter()
 const scoreResource = useSecurityScore()

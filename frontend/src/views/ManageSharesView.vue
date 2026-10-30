@@ -101,7 +101,7 @@
                     <template v-if="row.shared_doctype === 'Vault Folder'">
                       <div class="flex items-center gap-2">
                         <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-surface-gray-3 text-ink-gray-7">
-                          <FeatherIcon :name="getFolderIcon(row.title, foldersResource.data)" class="w-3 h-3" />
+                          <Icon :name="getFolderIcon(row.title, foldersResource.data).replace(/^lucide-/, '')" class="w-3.5 h-3.5" />
                         </div>
                         <span>Folder</span>
                       </div>
@@ -125,7 +125,7 @@
                       @click.stop="openRoleUsersModal(item, row)"
                     >
                       <template #prefix>
-                        <FeatherIcon name="shield" class="w-3.5 h-3.5" />
+                        <span class="lucide-shield w-3.5 h-3.5" aria-hidden="true" />
                       </template>
                       {{ item }}
                     </Button>
@@ -138,7 +138,7 @@
                       @click.stop="openUserGroupModal(row)"
                     >
                       <template #prefix>
-                        <FeatherIcon name="users" class="w-3.5 h-3.5" />
+                        <span class="lucide-users w-3.5 h-3.5" aria-hidden="true" />
                       </template>
                       {{ row.user || (row.user_count ? row.user_count + ' Users' : 'Users') }}
                     </Button>
@@ -219,12 +219,12 @@
                   }] : []),
                   {
                     label: 'Delete Logs',
-                    icon: 'trash-2',
+                    icon: 'lucide-trash-2',
                     onClick: () => { showBulkDeleteDialog = true }
                   }
                 ]"
               >
-                <Button variant="ghost" icon="more-horizontal" class="text-ink-gray-7" />
+                <Button variant="ghost" icon="lucide-more-horizontal" class="text-ink-gray-7" />
               </Dropdown>
             </template>
           </ListSelectBanner>
@@ -243,18 +243,16 @@
       </template>
 
       <!-- Empty state -->
-      <EmptyState v-else icon="users" title="No shares found" description="Active shared secrets or folders will appear in this board" />
+      <EmptyState v-else icon="lucide-users" title="No shares found" description="Active shared secrets or folders will appear in this board" />
     </div>
 
     <!-- Admin Share Secret/Folder Dialog -->
     <Dialog
       v-model="showShareDialog"
-      :options="{
-        title: 'Share a Secret or Folder',
-        size: 'sm',
-      }"
+      title="Share a Secret or Folder"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <div class="space-y-4 pt-2">
           <!-- Shared DocType Selector -->
           <div>
@@ -324,7 +322,7 @@
                     +{{ overflowCount }}
                   </span>
                 </div>
-                <FeatherIcon v-else name="users" class="w-4 h-4 text-ink-gray-5" />
+                <span v-else class="lucide-users w-4 h-4 text-ink-gray-5" aria-hidden="true" />
               </template>
 
               <template #summary="{ selectedOptions, summary }">
@@ -372,7 +370,7 @@
                     +{{ overflowRoleCount }}
                   </span>
                 </div>
-                <FeatherIcon v-else name="shield" class="w-4 h-4 text-ink-gray-5" />
+                <span v-else class="lucide-shield w-4 h-4 text-ink-gray-5" aria-hidden="true" />
               </template>
 
               <template #summary="{ selectedOptions, summary }">
@@ -447,12 +445,10 @@
     <!-- Bulk Revoke Confirmation Dialog -->
     <Dialog
       v-model="showBulkRevokeConfirm"
-      :options="{
-        title: 'Revoke Selected Shares',
-        size: 'sm',
-      }"
+      title="Revoke Selected Shares"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <p class="text-sm text-ink-gray-7 pt-2">
           Are you sure you want to revoke access for the <span class="font-semibold text-ink-gray-9">{{ selectedShares.size }}</span> selected sharing records? The recipients will immediately lose access.
         </p>
@@ -475,18 +471,16 @@
     <!-- Bulk Delete Confirmation Dialog -->
     <Dialog
       v-model="showBulkDeleteDialog"
-      :options="{
-        title: 'Delete Selected Logs',
-        size: 'sm',
-      }"
+      title="Delete Selected Logs"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <div class="pt-2 flex flex-col gap-3">
           <p class="text-sm text-ink-gray-7">
             Are you sure you want to permanently delete the <span class="font-semibold text-ink-gray-9">{{ selectedShares.size }}</span> selected sharing logs? This action cannot be undone.
           </p>
           <div v-if="hasActiveSharesSelected" class="bg-red-50 text-red-700 text-sm p-3 rounded-md flex items-start gap-2 border border-red-200 font-medium leading-relaxed">
-            <FeatherIcon name="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+            <span class="lucide-alert-triangle w-4 h-4 mt-0.5 shrink-0 text-red-600" aria-hidden="true" />
             <p>You have selected active shares. Deleting these logs will <b>immediately revoke access</b> for the recipients.</p>
           </div>
         </div>
@@ -526,15 +520,7 @@ import { useColumnResize } from '../composables/useColumnResize'
 import RefreshIcon from '../components/RefreshIcon.vue'
 import {
   Button,
-  ListView,
-  ListRow,
-  ListRowItem,
-  ListRows,
-  ListSelectBanner,
-  ListHeader,
-  ListFooter,
   Badge,
-  FeatherIcon,
   Avatar,
   Dialog,
   FormControl,
@@ -544,9 +530,18 @@ import {
   Checkbox,
   toast,
   Breadcrumbs,
-  ListHeaderItem,
   TextInput
 } from 'frappe-ui'
+import {
+  ListView,
+  ListRow,
+  ListRowItem,
+  ListRows,
+  ListSelectBanner,
+  ListHeader,
+  ListHeaderItem,
+  ListFooter
+} from 'frappe-ui/experimental'
 import { mobileSidebarOpened, useSharedWithMe, useShareSecret, useUnshare, useShareOptions, useSecrets, useFolders, useBulkDeleteShares, useRoleUsers, useUpdateSharePermission, useVaultStats, useSaveRoleMemberPermission } from '../composables/vault'
 import EmptyState from '../components/EmptyState.vue'
 import SecretTypeIcon from '../components/SecretTypeIcon.vue'

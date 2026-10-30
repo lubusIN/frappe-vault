@@ -90,3 +90,54 @@ class TestFolders(FrappeTestCase):
         self.assertFalse(frappe.db.exists("Vault Folder", parent["name"]))
         self.assertFalse(frappe.db.exists("Vault Folder", child["name"]))
         self.assertFalse(frappe.db.exists("Vault Secret", secret["name"]))
+
+    def test_update_folder_parent_reparenting(self):
+        from frappe_vault.api.folders import update as update_folder
+
+        parent_a = create("Test Folder A", icon="folder")
+        parent_b = create("Test Folder B", icon="folder")
+        child = create("Test Subfolder", icon="folder", parent_vault_folder=parent_a["name"])
+
+        # Verify initial parent
+        child_doc = frappe.get_doc("Vault Folder", child["name"])
+        self.assertEqual(child_doc.parent_vault_folder, parent_a["name"])
+
+        # Re-parent under Parent B
+        update_folder(name=child["name"], parent_vault_folder=parent_b["name"])
+        child_doc.reload()
+        self.assertEqual(child_doc.parent_vault_folder, parent_b["name"])
+
+        # Move to Root level (empty string or None)
+        update_folder(name=child["name"], parent_vault_folder="")
+        child_doc.reload()
+        self.assertIsNone(child_doc.parent_vault_folder)
+
+        # Cleanup
+        frappe.delete_doc("Vault Folder", child["name"])
+        frappe.delete_doc("Vault Folder", parent_a["name"])
+        frappe.delete_doc("Vault Folder", parent_b["name"])
+
+    def test_delete_folder_with_subfolder_having_children_move_up(self):
+        """Test deleting a folder in a deep tree where the moving subfolder itself has subfolders."""
+        from frappe_vault.api.folders import delete as delete_folder
+
+        root_h = create("Test Folder H", icon="folder")
+        test_1 = create("Test Folder 1", icon="folder", parent_vault_folder=root_h["name"])
+        test1_1 = create("Test Subfolder 1-1", icon="folder", parent_vault_folder=test_1["name"])
+        test2_1 = create("Test Subfolder 2-1", icon="folder", parent_vault_folder=test1_1["name"])
+
+        # Delete test_1 with move_up (should move test1_1 under root_h, keeping test2_1 under test1_1)
+        delete_folder(test_1["name"], subfolder_action="move_up")
+
+        self.assertFalse(frappe.db.exists("Vault Folder", test_1["name"]))
+
+        # test1_1 should now be under root_h
+        test1_1_doc = frappe.get_doc("Vault Folder", test1_1["name"])
+        self.assertEqual(test1_1_doc.parent_vault_folder, root_h["name"])
+
+        # test2_1 should still be under test1_1
+        test2_1_doc = frappe.get_doc("Vault Folder", test2_1["name"])
+        self.assertEqual(test2_1_doc.parent_vault_folder, test1_1["name"])
+
+        # Cleanup
+        delete_folder(root_h["name"], subfolder_action="delete_all")

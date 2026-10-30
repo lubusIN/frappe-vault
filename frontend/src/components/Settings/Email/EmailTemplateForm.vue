@@ -100,7 +100,8 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
-import { Button, TextInput, Select, TextEditor, Checkbox, Switch, createResource, toast } from 'frappe-ui'
+import { Button, TextInput, Select, Checkbox, Switch, createResource, toast } from 'frappe-ui'
+import { TextEditor } from 'frappe-ui/experimental'
 
 const props = defineProps({
   templateId: {
@@ -124,29 +125,33 @@ const template = reactive({
     response: '',
     response_html: '',
     use_html: 0,
-    vault_enabled: 1,
-    vault_is_default: 0
+    vault_enabled: true,
+    vault_is_default: false
   }
 })
 
 onMounted(async () => {
   if (props.templateId) {
-    const docRes = createResource({
-      url: 'frappe.client.get',
-      makeParams() {
-        return {
-          doctype: 'Email Template',
-          name: props.templateId
+    try {
+      const docRes = createResource({
+        url: 'frappe.client.get',
+        makeParams() {
+          return {
+            doctype: 'Email Template',
+            name: props.templateId
+          }
         }
-      }
-    })
-    const doc = await docRes.fetch()
-    Object.assign(template.doc, doc)
+      })
+      const doc = await docRes.fetch()
+      Object.assign(template.doc, doc)
 
-    // Set boolean equivalents for UI components
-    template.doc.vault_enabled = !!template.doc.vault_enabled
-    template.doc.vault_is_default = !!template.doc.vault_is_default
-    contentType.value = template.doc.use_html ? 'HTML' : 'Rich Text'
+      // Set boolean equivalents for UI components
+      template.doc.vault_enabled = Boolean(template.doc.vault_enabled)
+      template.doc.vault_is_default = Boolean(template.doc.vault_is_default)
+      contentType.value = template.doc.use_html ? 'HTML' : 'Rich Text'
+    } catch (err) {
+      toast.error(err.messages?.[0] || err.message || 'Failed to load email template.')
+    }
   }
 })
 

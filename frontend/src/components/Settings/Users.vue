@@ -1,8 +1,8 @@
 <template>
   <div class="flex h-full flex-col gap-6 p-6 text-ink-gray-8">
     <!-- Header -->
-    <div class="flex justify-between px-2 pt-2">
-      <div class="flex flex-col gap-1 w-9/12">
+    <div class="flex flex-col sm:flex-row justify-between gap-3 px-2 pt-2">
+      <div class="flex flex-col gap-1 w-full sm:w-9/12">
         <h2 class="flex gap-2 text-2xl-semibold leading-none h-5">
           Users
         </h2>
@@ -10,7 +10,7 @@
           Manage Vault users by adding or inviting them, and assign roles to control their access and permissions
         </p>
       </div>
-      <div class="flex item-center space-x-2 w-3/12 justify-end">
+      <div class="flex items-center space-x-2 w-full sm:w-3/12 justify-start sm:justify-end">
         <Dropdown
           :options="[
             {
@@ -26,7 +26,7 @@
           ]"
           :button="{
             label: 'New',
-            iconLeft: 'plus',
+            iconLeft: 'lucide-plus',
             variant: 'solid',
           }"
           placement="right"
@@ -46,7 +46,7 @@
 
     <!-- Empty State -->
     <div v-else-if="!usersList?.length && !search" class="flex flex-col items-center justify-center flex-1 h-full gap-3">
-      <FeatherIcon name="user" class="w-12 h-12 text-ink-gray-4 stroke-1" />
+      <span class="lucide-user w-12 h-12 text-ink-gray-4 stroke-1" aria-hidden="true" />
       <div class="flex flex-col items-center gap-1 text-center">
         <p class="text-lg font-medium text-ink-gray-8">No Users Found</p>
         <p class="text-sm text-ink-gray-5">Add one to get started.</p>
@@ -107,7 +107,8 @@
               <Dropdown
                 :options="getMoreOptions(user)"
                 :button="{
-                  icon: 'more-horizontal',
+                  icon: 'lucide-more-horizontal',
+                  variant: 'ghost',
                 }"
                 placement="right"
               />
@@ -122,7 +123,7 @@
                 text="User has not accepted the invitation yet"
               >
                 <div class="px-2 py-1 bg-surface-gray-2 rounded text-ink-gray-5 text-sm mr-2 flex items-center gap-1">
-                  <FeatherIcon name="clock" class="w-3 h-3" />
+                  <span class="lucide-clock w-3 h-3" aria-hidden="true" />
                   Pending
                 </div>
               </Tooltip>
@@ -131,8 +132,8 @@
                 :options="getDropdownOptions(user)"
                 :button="{
                   label: user.role,
-                  iconRight: 'chevron-down',
-                  iconLeft: user.role === 'Vault Admin' ? 'shield' : 'user',
+                  iconRight: 'lucide-chevron-down',
+                  iconLeft: user.role === 'Vault Admin' ? 'lucide-shield' : 'lucide-user',
                 }"
                 placement="right"
               />
@@ -160,7 +161,6 @@ import {
   Tooltip,
   Select,
   Button,
-  FeatherIcon,
   createListResource
 } from 'frappe-ui'
 import { ref, computed } from 'vue'
@@ -213,7 +213,7 @@ function getMoreOptions(user) {
     return [
       {
         label: 'Delete Invite',
-        icon: 'trash-2',
+        icon: 'lucide-trash-2',
         onClick: () => {
           pendingInvitations.delete.submit(user.name).then(() => {
             toast.success('Invitation deleted')
@@ -226,7 +226,7 @@ function getMoreOptions(user) {
   return [
     {
       label: 'Remove',
-      icon: 'trash-2',
+      icon: 'lucide-trash-2',
       onClick: () => removeUser(user)
     }
   ]
@@ -236,12 +236,12 @@ function getDropdownOptions(user) {
   return [
     {
       label: 'Vault Admin',
-      icon: 'shield',
+      icon: 'lucide-shield',
       onClick: () => updateRole(user, 'Vault Admin'),
     },
     {
       label: 'Vault User',
-      icon: 'user',
+      icon: 'lucide-user',
       onClick: () => updateRole(user, 'Vault User'),
     },
   ]

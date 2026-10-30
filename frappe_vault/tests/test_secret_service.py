@@ -18,7 +18,18 @@ class TestSecretService(FrappeTestCase):
         # Ensure clean slate for test secrets
         frappe.db.delete(
             "Vault Secret",
-            {"title": ["in", ["Test Service Secret", "Test Bookmark Secret", "Test Update Secret"]]},
+            {
+                "title": [
+                    "in",
+                    [
+                        "Test Service Secret",
+                        "Test Bookmark Secret",
+                        "Test Update Secret",
+                        "User Owned Secret",
+                        "Admin Secret",
+                    ],
+                ]
+            },
         )
         frappe.db.commit()
 
@@ -26,7 +37,18 @@ class TestSecretService(FrappeTestCase):
         frappe.set_user("Administrator")
         frappe.db.delete(
             "Vault Secret",
-            {"title": ["in", ["Test Service Secret", "Test Bookmark Secret", "Test Update Secret"]]},
+            {
+                "title": [
+                    "in",
+                    [
+                        "Test Service Secret",
+                        "Test Bookmark Secret",
+                        "Test Update Secret",
+                        "User Owned Secret",
+                        "Admin Secret",
+                    ],
+                ]
+            },
         )
         frappe.db.commit()
 
@@ -193,12 +215,17 @@ class TestSecretService(FrappeTestCase):
                     "email": test_email,
                     "first_name": "Standard",
                     "last_name": "Vault User",
-                    "roles": [{"role": "Vault User"}],
                 }
             )
             user_doc.insert(ignore_permissions=True)
 
+        user_doc = frappe.get_doc("User", test_email)
+        user_doc.add_roles("Vault User")
+        frappe.clear_cache(user=test_email)
+
         orig_user = frappe.session.user
+        s_own = None
+        s_other = None
         try:
             frappe.set_user(test_email)
 
@@ -250,4 +277,9 @@ class TestSecretService(FrappeTestCase):
                 upload_file_api()
 
         finally:
+            frappe.set_user("Administrator")
+            if s_own:
+                delete_secret(s_own["name"])
+            if s_other:
+                delete_secret(s_other["name"])
             frappe.set_user(orig_user)

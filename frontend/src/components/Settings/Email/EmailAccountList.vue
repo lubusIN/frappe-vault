@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full p-4 rounded-r-lg">
     <!-- List View -->
     <template v-if="currentView === 'list'">
-      <div class="flex items-center justify-between px-4 py-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3">
         <div>
           <h2 class="text-xl font-semibold text-ink-gray-9 mb-1">Email Accounts</h2>
           <p class="text-sm text-ink-gray-5">Manage your email accounts for incoming and outgoing emails.</p>
@@ -22,7 +22,7 @@
           class="flex flex-col items-center justify-center h-full text-center"
         >
           <div class="flex flex-col items-center justify-center py-20">
-            <FeatherIcon name="mail" class="w-12 h-12 text-ink-gray-4 mb-4" />
+            <span class="lucide-mail w-12 h-12 text-ink-gray-4 mb-4" aria-hidden="true" />
             <h3 class="text-lg font-medium text-ink-gray-9 mb-1">No Email Accounts Found</h3>
             <p class="text-sm text-ink-gray-5 mb-4">Add one to get started.</p>
           </div>
@@ -38,7 +38,7 @@
           >
             <div class="flex items-center gap-3">
               <div class="flex items-center justify-center w-10 h-10 rounded-full bg-surface-gray-3">
-                <FeatherIcon name="mail" class="w-5 h-5 text-ink-gray-6" />
+                <span class="lucide-mail w-5 h-5 text-ink-gray-6" aria-hidden="true" />
               </div>
               <div class="flex flex-col">
                 <span class="text-sm font-medium text-ink-gray-9">{{ account.email_account_name || account.email_id }}</span>
@@ -58,7 +58,7 @@
                     }
                   ]"
                   :button="{
-                    icon: 'more-horizontal',
+                    icon: 'lucide-more-horizontal',
                     variant: 'ghost'
                   }"
                   placement="bottom-end"
@@ -80,19 +80,27 @@
     </template>
 
     <!-- Confirm Delete Dialog -->
-    <ConfirmDialog
-      v-if="confirmDeleteDialog.show"
+    <Dialog
+      v-model="confirmDeleteDialog.show"
       title="Remove Email Account"
-      message="Are you sure you want to remove this email account?"
-      :onConfirm="confirmDeleteAccount"
-      :onCancel="() => confirmDeleteDialog.show = false"
-    />
+      size="sm"
+    >
+      <template #default>
+        <p class="text-sm text-ink-gray-7">Are you sure you want to remove this email account?</p>
+      </template>
+      <template #actions>
+        <div class="flex justify-end gap-2">
+          <Button variant="ghost" label="Cancel" @click="confirmDeleteDialog.show = false" />
+          <Button variant="solid" theme="red" label="Delete" @click="confirmDeleteAccount" />
+        </div>
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { Button, FeatherIcon, Badge, Dropdown, createListResource, call, toast, ConfirmDialog } from 'frappe-ui'
+import { Button, Badge, Dropdown, Dialog, createListResource, call, toast } from 'frappe-ui'
 import EmailAccountForm from './EmailAccountForm.vue'
 
 // list | providers | form
