@@ -15,6 +15,7 @@ def share(
     role: str | None = None,
     permission_level: str = "View Only",
     expires_on: str | None = None,
+    cascade_permissions: int = 1,
 ) -> dict:
     target_role = frappe_role or role
     from frappe_vault.services.sharing_service import share_secret
@@ -27,6 +28,7 @@ def share(
         frappe_role=target_role,
         permission_level=permission_level,
         expires_on=expires_on,
+        cascade_permissions=cascade_permissions,
     )
 
 

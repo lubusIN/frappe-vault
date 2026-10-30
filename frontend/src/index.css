@@ -8,15 +8,17 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  @apply bg-surface-base rounded;
+  background-color: var(--surface-base, #ffffff);
+  border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-surface-gray-3 rounded;
+  background-color: var(--surface-gray-3, #e5e7eb);
+  border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  @apply bg-surface-gray-4;
+  background-color: var(--surface-gray-4, #d1d5db);
 }
 
 /* --- Dark mode sidebar polish --- */
@@ -74,10 +76,37 @@
 
 /* Ensure Frappe UI Dialog backdrop and content stack above all page elements and controls */
 .dialog-overlay {
-  z-index: 100 !important;
+  z-index: 50 !important;
 }
 
-/* Ensure Frappe UI (Reka) Popovers, Dropdowns, and Tooltips stack above all page elements */
-[data-reka-popper-content-wrapper] {
-  z-index: 100 !important;
+.dialog-scroll-container {
+  z-index: 51 !important;
+}
+
+/* Ensure Frappe UI floating overlays (Select, Combobox, Popover, Dropdown, Menu, Tooltip) stack above all page elements and modals */
+[data-slot="content"]:not(.dialog-content),
+[data-reka-select-content],
+[data-reka-popper-content-wrapper],
+[data-radix-popper-content-wrapper],
+[data-selection] {
+  z-index: 200 !important;
+}
+
+.vault-sidebar[data-state="collapsed"] .vault-sidebar-header > *,
+.vault-sidebar[data-state="collapsed"] [data-slot="sidebar-header"] > * {
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+/* Fix IconPicker icons in dark mode */
+[data-theme="dark"] [data-reka-popper-content-wrapper] button svg,
+[data-theme="dark"] [data-headlessui-state="open"] button svg {
+  color: var(--text-ink-gray-3, #d1d5db) !important;
+}
+[data-theme="dark"] [data-reka-popper-content-wrapper] button:hover svg,
+[data-theme="dark"] [data-headlessui-state="open"] button:hover svg {
+  color: white !important;
 }

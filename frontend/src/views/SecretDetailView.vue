@@ -8,7 +8,7 @@
         <div class="flex min-w-0 items-center gap-2">
           <Button variant="ghost" icon="lucide-arrow-left" @click="router.push('/secrets')" />
           <div v-if="secretData" :class="`size-6 rounded-full flex items-center justify-center shrink-0 shadow-sm border border-outline-gray-1 ${typeMeta[secretData.secret_type || 'Other']?.bg}`">
-            <FeatherIcon :name="typeMeta[secretData.secret_type || 'Other']?.icon || 'key'" class="w-3.5 h-3.5 text-ink-gray-7" />
+            <Icon :name="(typeMeta[secretData.secret_type || 'Other']?.icon || 'key').replace(/^lucide-/, '')" class="w-3.5 h-3.5" />
           </div>
           <PageHeaderTitle v-if="secretData">{{ secretData.title }}</PageHeaderTitle>
           <div v-if="secretData" class="text-sm text-ink-gray-5 font-mono ml-2 cursor-copy hover:text-ink-gray-8" @click="copyToClipboard(secretData.name)" title="Copy ID">
@@ -72,12 +72,10 @@
     <!-- Delete Confirmation Dialog -->
     <Dialog
       v-model="showDeleteDialog"
-      :options="{
-        title: 'Delete Secret',
-        size: 'sm',
-      }"
+      title="Delete Secret"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <div class="space-y-3">
           <p class="text-sm text-ink-gray-6 mt-1 leading-normal">
             Are you sure you want to permanently delete <strong>{{ secretData?.title }}</strong>? This action cannot be undone.
@@ -113,7 +111,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Button,
-  FeatherIcon,
   Dialog,
   ErrorMessage,
   toast,

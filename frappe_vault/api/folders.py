@@ -7,7 +7,9 @@ from frappe import _
 @frappe.whitelist()
 def get_all() -> list[dict]:
     folders = frappe.get_list(
-        "Vault Folder", fields=["name", "folder_name", "icon", "owner"], order_by="folder_name asc"
+        "Vault Folder",
+        fields=["name", "folder_name", "icon", "owner", "parent_vault_folder", "is_group", "lft", "rgt"],
+        order_by="lft asc",
     )
 
     user = frappe.session.user
@@ -16,19 +18,31 @@ def get_all() -> list[dict]:
 
     writable_folder_names = set()
     if not is_admin:
-        # Use parameterized query instead of f-string
+        # User has write access if they have Edit/Full Control on this folder OR any of its ancestors
         writable_shares = frappe.db.sql(
             """
-            SELECT shared_name FROM `tabVault Share`
-            WHERE shared_doctype = 'Vault Folder'
-            AND is_revoked = 0
-            AND permission_level IN ('Edit', 'Full Control')
-            AND (expires_on IS NULL OR expires_on > NOW())
-            AND (
-                (share_type = 'User' AND user = %(user)s)
-                OR (share_type = 'Role' AND frappe_role IN (
-                    SELECT role FROM `tabHas Role` WHERE parent = %(user)s
-                ))
+            SELECT `tabVault Folder`.name FROM `tabVault Folder`
+            WHERE EXISTS (
+                SELECT 1 FROM `tabVault Folder` ancestor
+                JOIN `tabVault Share` vs ON vs.shared_doctype = 'Vault Folder' AND vs.shared_name = ancestor.name
+                WHERE `tabVault Folder`.lft >= ancestor.lft AND `tabVault Folder`.rgt <= ancestor.rgt
+                AND vs.is_revoked = 0
+                AND vs.permission_level IN ('Edit', 'Full Control')
+                AND (vs.shared_name = `tabVault Folder`.name OR vs.cascade_permissions = 1)
+                AND (
+                    (vs.share_type = 'User' AND vs.user = %(user)s)
+                    OR (vs.share_type = 'Role' AND vs.frappe_role IN (
+                        SELECT role FROM `tabHas Role` WHERE parent = %(user)s
+                    ) AND NOT EXISTS (
+                        SELECT 1 FROM `tabVault Share` override
+                        WHERE override.shared_doctype = 'Vault Folder'
+                        AND override.shared_name = vs.shared_name
+                        AND override.share_type = 'User'
+                        AND override.user = %(user)s
+                        AND override.is_revoked = 1
+                    ))
+                )
+                AND (vs.expires_on IS NULL OR vs.expires_on > NOW())
             )
             """,
             {"user": user},
@@ -46,14 +60,31 @@ def get_all() -> list[dict]:
 
 
 @frappe.whitelist()
-def create(folder_name: str, icon: str | None = None, **kwargs) -> dict:
+def create(
+    folder_name: str,
+    icon: str | None = None,
+    parent_vault_folder: str | None = None,
+    is_group: int = 0,
+    **kwargs,
+) -> dict:
     if not folder_name or not isinstance(folder_name, str):
         frappe.throw(_("Folder name is required"), frappe.ValidationError)
     if not frappe.has_permission("Vault Folder", "create"):
         frappe.throw(_("You don't have permission to create folders"), frappe.PermissionError)
 
-    doc = frappe.get_doc({"doctype": "Vault Folder", "folder_name": folder_name, "icon": icon})
+    doc = frappe.get_doc(
+        {
+            "doctype": "Vault Folder",
+            "folder_name": folder_name,
+            "icon": icon,
+            "parent_vault_folder": parent_vault_folder,
+            "is_group": is_group,
+        }
+    )
     doc.insert()
+
+    if parent_vault_folder:
+        frappe.db.set_value("Vault Folder", parent_vault_folder, "is_group", 1)
 
     # Notify Vault Admins of new folder creation
     from frappe_vault.services.notification_service import notify_vault_admins
@@ -70,7 +101,9 @@ def create(folder_name: str, icon: str | None = None, **kwargs) -> dict:
 
 
 @frappe.whitelist()
-def delete(name: str, delete_secrets: bool = False) -> dict:
+def delete(
+    name: str, delete_secrets: bool = False, subfolder_action: str = "move_up", target_folder: str = None
+) -> dict:
     if not name or not isinstance(name, str):
         frappe.throw(_("Invalid folder identifier"), frappe.ValidationError)
     from frappe_vault.utils.permissions import has_folder_permission
@@ -83,6 +116,43 @@ def delete(name: str, delete_secrets: bool = False) -> dict:
     should_delete_secrets = (
         frappe.utils.cint(delete_secrets) if not isinstance(delete_secrets, bool) else delete_secrets
     )
+
+    # Handle Subfolders
+    folder_doc = frappe.get_doc("Vault Folder", name)
+    children = frappe.get_all("Vault Folder", filters={"parent_vault_folder": name}, pluck="name")
+
+    if subfolder_action == "delete_all":
+        for child in children:
+            # Recursively delete children and their secrets
+            delete(child, delete_secrets=should_delete_secrets, subfolder_action="delete_all")
+    else:
+        # Move children to another folder (or root)
+        new_parent = None
+        if subfolder_action == "move_up":
+            new_parent = folder_doc.parent_vault_folder
+        elif subfolder_action == "move_to" and target_folder:
+            new_parent = target_folder
+
+        if new_parent:
+            frappe.db.set_value("Vault Folder", new_parent, "is_group", 1)
+
+        for child in children:
+            has_child_children = frappe.db.count("Vault Folder", {"parent_vault_folder": child})
+            child_is_group = 1 if has_child_children else 0
+
+            frappe.db.set_value(
+                "Vault Folder",
+                child,
+                {
+                    "parent_vault_folder": new_parent,
+                    "old_parent": new_parent or "",
+                    "is_group": child_is_group,
+                },
+                update_modified=False,
+            )
+
+        # Clear group flag on deleting folder so NestedSet on_trash allows deletion
+        frappe.db.set_value("Vault Folder", name, "is_group", 0, update_modified=False)
 
     secrets = frappe.get_all("Vault Secret", filters={"folder": name}, fields=["name"])
     if should_delete_secrets:
@@ -110,6 +180,18 @@ def delete(name: str, delete_secrets: bool = False) -> dict:
         "Vault Folder", name, force=True, ignore_doctypes=["Vault Audit Log"], ignore_permissions=True
     )
 
+    # Clean up old parent's is_group if it now has no children
+    old_parent = folder_doc.parent_vault_folder
+    if old_parent and frappe.db.exists("Vault Folder", old_parent):
+        remaining_in_old_parent = frappe.db.count("Vault Folder", {"parent_vault_folder": old_parent})
+        if not remaining_in_old_parent:
+            frappe.db.set_value("Vault Folder", old_parent, "is_group", 0, update_modified=False)
+
+    # Rebuild NestedSet tree so left and right indices are completely consistent
+    from frappe.utils.nestedset import rebuild_tree
+
+    rebuild_tree("Vault Folder")
+
     # Notify Vault Admins
     from frappe_vault.services.notification_service import notify_vault_admins
 
@@ -125,7 +207,14 @@ def delete(name: str, delete_secrets: bool = False) -> dict:
 
 
 @frappe.whitelist()
-def update(name: str, folder_name: str | None = None, icon: str | None = None, **kwargs) -> dict:
+def update(
+    name: str,
+    folder_name: str | None = None,
+    icon: str | None = None,
+    parent_vault_folder: str | None = None,
+    is_group: int | None = None,
+    **kwargs,
+) -> dict:
     if not name or not isinstance(name, str):
         frappe.throw(_("Invalid folder identifier"), frappe.ValidationError)
     from frappe_vault.utils.permissions import has_folder_permission
@@ -139,10 +228,33 @@ def update(name: str, folder_name: str | None = None, icon: str | None = None, *
         name = _rename_doc("Vault Folder", name, folder_name)
 
     doc = frappe.get_doc("Vault Folder", name)
+    old_parent = doc.parent_vault_folder
     if icon is not None:
         doc.icon = icon
+    if parent_vault_folder is not None:
+        doc.parent_vault_folder = parent_vault_folder if parent_vault_folder else None
+    if is_group is not None:
+        doc.is_group = is_group
+
+    # Prevent "cannot be a leaf node" NestedSet error if folder has children
+    has_children = frappe.db.count("Vault Folder", {"parent_vault_folder": name})
+    if has_children:
+        doc.is_group = 1
+
+    if doc.parent_vault_folder:
+        frappe.db.set_value("Vault Folder", doc.parent_vault_folder, "is_group", 1)
 
     doc.save()
+
+    if old_parent and old_parent != doc.parent_vault_folder and frappe.db.exists("Vault Folder", old_parent):
+        remaining = frappe.db.count("Vault Folder", {"parent_vault_folder": old_parent})
+        if not remaining:
+            frappe.db.set_value("Vault Folder", old_parent, "is_group", 0)
+
+    from frappe.utils.nestedset import rebuild_tree
+
+    rebuild_tree("Vault Folder")
+
     return {"name": doc.name}
 
 

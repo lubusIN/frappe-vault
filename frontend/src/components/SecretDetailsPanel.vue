@@ -2,7 +2,7 @@
   <article class="space-y-2">
     <div class="flex items-center justify-between cursor-pointer select-none group" @click="detailsOpen = !detailsOpen">
       <h3 class="text-xs font-semibold text-ink-gray-5 uppercase tracking-wider group-hover:text-ink-gray-7 transition-colors">Secret Data</h3>
-      <FeatherIcon name="chevron-down" class="w-4 h-4 text-ink-gray-4 transition-transform duration-200" :class="{ '-rotate-90': !detailsOpen }" />
+      <span class="lucide-chevron-down w-4 h-4 text-ink-gray-4 transition-transform duration-200" :class="{ '-rotate-90': !detailsOpen }" aria-hidden="true" />
     </div>
     <div v-show="detailsOpen" class="space-y-4 pt-2">
       <!-- EDIT VIEW FORM -->
@@ -27,7 +27,20 @@
         <div class="flex items-center justify-between gap-3 text-sm">
           <label class="w-28 shrink-0 text-ink-gray-5 font-normal">Folder</label>
           <div class="flex-1 min-w-0">
-            <FormControl v-model="editForm.folder" type="select" :options="folderOptions" class="w-full text-sm cursor-pointer" />
+            <Combobox
+              v-model="editForm.folder"
+              :options="folderOptions"
+              placeholder="Select a folder..."
+              class="w-full text-sm cursor-pointer"
+            >
+              <template #item-prefix="{ item }">
+                <div :style="{ paddingLeft: (item.level * 1.5) + 'rem' }" class="flex items-center">
+                  <span class="lucide-corner-down-right w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="item.level > 0" aria-hidden="true" />
+                  <span class="lucide-folder w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="item.value !== ''" aria-hidden="true" />
+                  <div class="w-4 h-4 mr-2 shrink-0" v-else></div>
+                </div>
+              </template>
+            </Combobox>
           </div>
         </div>
 
@@ -60,7 +73,7 @@
                       @click="openImagePreview(fileUrl)"
                     />
                     <div v-else class="w-10 h-10 rounded-lg bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center shrink-0 cursor-pointer" @click="openFileUrl(fileUrl)">
-                      <FeatherIcon name="file-text" class="w-5 h-5 text-ink-gray-7" />
+                      <span class="lucide-file-text w-5 h-5 text-ink-gray-7" aria-hidden="true" />
                     </div>
                     <div class="min-w-0 cursor-pointer" @click="isImageUrl(fileUrl) ? openImagePreview(fileUrl) : openFileUrl(fileUrl)">
                       <p class="text-xs font-semibold text-ink-gray-9 truncate hover:text-ink-blue-link transition-colors">{{ getFileName(fileUrl) }}</p>
@@ -85,7 +98,7 @@
                   @change="handleEditFileUpload($event, field.name)"
                 />
                 <div class="flex flex-col items-center gap-1">
-                  <FeatherIcon name="paperclip" class="w-6 h-6 text-ink-gray-5" />
+                  <span class="lucide-paperclip w-6 h-6 text-ink-gray-5" aria-hidden="true" />
                   <span class="text-xs font-semibold text-ink-gray-8">
                     {{ uploadingEditFiles ? 'Uploading files...' : (editAttachmentList.length > 0 ? '+ Add More Files' : 'Click or drag files here to upload') }}
                   </span>
@@ -158,7 +171,7 @@
                     @error="imageLoadErrorMap[fileUrl] = true"
                   />
                   <div v-else class="w-10 h-10 rounded-lg bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center shrink-0">
-                    <FeatherIcon name="file-text" class="w-5 h-5 text-ink-gray-7" />
+                    <span class="lucide-file-text w-5 h-5 text-ink-gray-7" aria-hidden="true" />
                   </div>
                   <div class="min-w-0">
                     <p class="text-xs font-semibold text-ink-gray-9 truncate hover:text-ink-blue-link transition-colors">{{ getFileName(fileUrl) }}</p>
@@ -171,7 +184,7 @@
                     v-if="isImageUrl(fileUrl) && !imageLoadErrorMap[fileUrl]"
                     variant="subtle"
                     size="xs"
-                    icon="eye"
+                    icon="lucide-eye"
                     label="Preview"
                     class="font-medium text-xs shadow-2xs"
                     @click="openImagePreview(fileUrl)"
@@ -184,7 +197,7 @@
                     download
                     class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-surface-base border border-outline-gray-2 text-ink-gray-8 hover:bg-surface-gray-1 transition-colors shadow-2xs"
                   >
-                    <FeatherIcon name="download" class="w-3.5 h-3.5 text-ink-gray-6" /> Download
+                    <span class="lucide-download w-3.5 h-3.5 text-ink-gray-6" aria-hidden="true" /> Download
                   </a>
                 </div>
               </div>
@@ -207,7 +220,7 @@
             <div v-else-if="field.isLink" class="min-w-0 flex-1 flex items-center justify-end gap-1.5 overflow-hidden">
               <a :href="secretData[field.name]" target="_blank" class="min-w-0 font-medium text-ink-blue-link hover:underline truncate inline-flex items-center justify-end gap-1">
                 <span class="truncate">{{ secretData[field.name] }}</span>
-                <FeatherIcon name="external-link" class="w-3.5 h-3.5 shrink-0 text-ink-blue-link" />
+                <span class="lucide-external-link w-3.5 h-3.5 shrink-0 text-ink-blue-link" aria-hidden="true" />
               </a>
               <Button
                 v-if="canCopy"
@@ -253,8 +266,8 @@
     </div>
 
     <!-- Image Lightbox Modal / Popover Preview -->
-    <Dialog v-model="previewModalOpen" :options="{ size: 'xl', title: 'Image Preview' }">
-      <template #body-content>
+    <Dialog v-model="previewModalOpen" title="Image Preview" size="xl">
+      <template #default>
         <div class="flex flex-col items-center gap-4 py-2">
           <div class="relative w-full max-h-[75vh] flex items-center justify-center bg-surface-gray-7 rounded-2xl overflow-hidden p-2">
             <img :src="previewImageUrl" class="max-w-full max-h-[70vh] object-contain rounded-lg" />
@@ -263,10 +276,10 @@
             <span class="text-xs font-mono text-ink-gray-7 truncate max-w-xs">{{ getFileName(previewImageUrl) }}</span>
             <div class="flex items-center gap-2">
               <a :href="previewImageUrl" target="_blank" download class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-base border border-outline-gray-2 text-ink-gray-9 hover:bg-surface-gray-1 transition-colors shadow-2xs">
-                <FeatherIcon name="download" class="w-4 h-4 text-ink-gray-7" /> Download
+                <span class="lucide-download w-4 h-4 text-ink-gray-7" aria-hidden="true" /> Download
               </a>
               <a :href="previewImageUrl" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-base border border-outline-gray-2 text-ink-gray-9 hover:bg-surface-gray-1 transition-colors shadow-2xs">
-                <FeatherIcon name="external-link" class="w-4 h-4 text-ink-gray-7" /> Open Original
+                <span class="lucide-external-link w-4 h-4 text-ink-gray-7" aria-hidden="true" /> Open Original
               </a>
             </div>
           </div>
@@ -280,11 +293,11 @@
 import { ref, reactive, computed, watch } from 'vue'
 import {
   Button,
-  FeatherIcon,
   TextInput,
   FormControl,
   Dialog,
   toast,
+  Combobox
 } from 'frappe-ui'
 
 import { useClipboard } from '../composables/clipboard'
@@ -317,15 +330,36 @@ const clipboard = useClipboard()
 folders.submit()
 
 const folderOptions = computed(() => {
-  const options = [{ label: 'No Folder', value: '' }]
-  if (folders.data) {
-    folders.data.forEach(f => {
-      if (f.can_write || f.name === props.secretData?.folder) {
-        options.push({ label: f.folder_name, value: f.name })
+  const opts = [{ label: 'No Folder', value: '', level: 0 }]
+  const foldersData = folders.data || []
+
+  const tree = []
+  const map = {}
+  foldersData.forEach(f => {
+    map[f.name] = { ...f, children: [] }
+  })
+
+  foldersData.forEach(f => {
+    if (f.parent_vault_folder && map[f.parent_vault_folder]) {
+      map[f.parent_vault_folder].children.push(map[f.name])
+    } else {
+      tree.push(map[f.name])
+    }
+  })
+
+  const traverse = (nodes, level = 0) => {
+    for (const node of nodes) {
+      if (node.can_write || node.name === props.secretData?.folder) {
+        opts.push({ label: node.folder_name, value: node.name, level })
       }
-    })
+      if (node.children?.length) {
+        traverse(node.children, level + 1)
+      }
+    }
   }
-  return options
+
+  traverse(tree)
+  return opts
 })
 
 function getFolderName(folderId) {

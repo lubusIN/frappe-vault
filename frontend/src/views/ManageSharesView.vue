@@ -78,6 +78,7 @@
               v-for="column in columns"
               :key="column.key"
               :item="column"
+              @columnWidthUpdated="handleColumnWidthUpdated"
             />
           </ListHeader>
           <ListRows class="sm:mx-5 mx-3">
@@ -100,7 +101,7 @@
                     <template v-if="row.shared_doctype === 'Vault Folder'">
                       <div class="flex items-center gap-2">
                         <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-surface-gray-3 text-ink-gray-7">
-                          <FeatherIcon :name="getFolderIcon(row.title, foldersResource.data)" class="w-3 h-3" />
+                          <Icon :name="getFolderIcon(row.title, foldersResource.data).replace(/^lucide-/, '')" class="w-3.5 h-3.5" />
                         </div>
                         <span>Folder</span>
                       </div>
@@ -124,7 +125,7 @@
                       @click.stop="openRoleUsersModal(item, row)"
                     >
                       <template #prefix>
-                        <FeatherIcon name="shield" class="w-3.5 h-3.5" />
+                        <span class="lucide-shield w-3.5 h-3.5" aria-hidden="true" />
                       </template>
                       {{ item }}
                     </Button>
@@ -137,7 +138,7 @@
                       @click.stop="openUserGroupModal(row)"
                     >
                       <template #prefix>
-                        <FeatherIcon name="users" class="w-3.5 h-3.5" />
+                        <span class="lucide-users w-3.5 h-3.5" aria-hidden="true" />
                       </template>
                       {{ row.user || (row.user_count ? row.user_count + ' Users' : 'Users') }}
                     </Button>
@@ -218,12 +219,12 @@
                   }] : []),
                   {
                     label: 'Delete Logs',
-                    icon: 'trash-2',
+                    icon: 'lucide-trash-2',
                     onClick: () => { showBulkDeleteDialog = true }
                   }
                 ]"
               >
-                <Button variant="ghost" icon="more-horizontal" class="text-ink-gray-7" />
+                <Button variant="ghost" icon="lucide-more-horizontal" class="text-ink-gray-7" />
               </Dropdown>
             </template>
           </ListSelectBanner>
@@ -242,18 +243,16 @@
       </template>
 
       <!-- Empty state -->
-      <EmptyState v-else icon="users" title="No shares found" description="Active shared secrets or folders will appear in this board" />
+      <EmptyState v-else icon="lucide-users" title="No shares found" description="Active shared secrets or folders will appear in this board" />
     </div>
 
     <!-- Admin Share Secret/Folder Dialog -->
     <Dialog
       v-model="showShareDialog"
-      :options="{
-        title: 'Share a Secret or Folder',
-        size: 'sm',
-      }"
+      title="Share a Secret or Folder"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <div class="space-y-4 pt-2">
           <!-- Shared DocType Selector -->
           <div>
@@ -261,8 +260,8 @@
             <TabButtons
               v-model="newShareDoctype"
               :options="[
-                { label: 'Secret', value: 'Vault Secret', class: 'flex-1 !justify-center', onClick: () => { newShareItem = '' } },
-                { label: 'Folder', value: 'Vault Folder', class: 'flex-1 !justify-center', onClick: () => { newShareItem = '' } }
+                { label: 'Secret', value: 'Vault Secret', class: 'flex-1 !justify-center', onClick: () => { newShareItem = ''; selectedItems = [] } },
+                { label: 'Folder', value: 'Vault Folder', class: 'flex-1 !justify-center', onClick: () => { newShareItem = ''; selectedItems = [] } }
               ]"
               class="w-full !flex"
             />
@@ -323,7 +322,7 @@
                     +{{ overflowCount }}
                   </span>
                 </div>
-                <FeatherIcon v-else name="users" class="w-4 h-4 text-ink-gray-5" />
+                <span v-else class="lucide-users w-4 h-4 text-ink-gray-5" aria-hidden="true" />
               </template>
 
               <template #summary="{ selectedOptions, summary }">
@@ -371,7 +370,7 @@
                     +{{ overflowRoleCount }}
                   </span>
                 </div>
-                <FeatherIcon v-else name="shield" class="w-4 h-4 text-ink-gray-5" />
+                <span v-else class="lucide-shield w-4 h-4 text-ink-gray-5" aria-hidden="true" />
               </template>
 
               <template #summary="{ selectedOptions, summary }">
@@ -408,6 +407,19 @@
             type="datetime"
             v-model="newShareExpiresOn"
           />
+
+          <!-- Apply to Subfolders Checkbox -->
+          <div v-if="newShareDoctype === 'Vault Folder' && hasChildFolders" class="pt-2">
+            <div class="flex items-center gap-2">
+              <Checkbox
+                v-model="newShareCascade"
+                label="Apply to all subfolders"
+              />
+            </div>
+            <p class="text-[11px] text-ink-gray-5 mt-1 ml-6 leading-tight">
+              If checked, recipients will automatically get access to any subfolders inside these folders.
+            </p>
+          </div>
         </div>
       </template>
       <template #actions>
@@ -433,12 +445,10 @@
     <!-- Bulk Revoke Confirmation Dialog -->
     <Dialog
       v-model="showBulkRevokeConfirm"
-      :options="{
-        title: 'Revoke Selected Shares',
-        size: 'sm',
-      }"
+      title="Revoke Selected Shares"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <p class="text-sm text-ink-gray-7 pt-2">
           Are you sure you want to revoke access for the <span class="font-semibold text-ink-gray-9">{{ selectedShares.size }}</span> selected sharing records? The recipients will immediately lose access.
         </p>
@@ -461,18 +471,16 @@
     <!-- Bulk Delete Confirmation Dialog -->
     <Dialog
       v-model="showBulkDeleteDialog"
-      :options="{
-        title: 'Delete Selected Logs',
-        size: 'sm',
-      }"
+      title="Delete Selected Logs"
+      size="sm"
     >
-      <template #body-content>
+      <template #default>
         <div class="pt-2 flex flex-col gap-3">
           <p class="text-sm text-ink-gray-7">
             Are you sure you want to permanently delete the <span class="font-semibold text-ink-gray-9">{{ selectedShares.size }}</span> selected sharing logs? This action cannot be undone.
           </p>
           <div v-if="hasActiveSharesSelected" class="bg-red-50 text-red-700 text-sm p-3 rounded-md flex items-start gap-2 border border-red-200 font-medium leading-relaxed">
-            <FeatherIcon name="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+            <span class="lucide-alert-triangle w-4 h-4 mt-0.5 shrink-0 text-red-600" aria-hidden="true" />
             <p>You have selected active shares. Deleting these logs will <b>immediately revoke access</b> for the recipients.</p>
           </div>
         </div>
@@ -508,8 +516,32 @@
 import ViewControlsBar from '../components/ViewControlsBar.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useColumnResize } from '../composables/useColumnResize'
 import RefreshIcon from '../components/RefreshIcon.vue'
-import { Badge, Button, TextInput, FeatherIcon, FormControl, ListView, ListHeader, ListHeaderItem, ListRows, ListRow, ListRowItem, ListSelectBanner, ListFooter, Dialog, Breadcrumbs, toast, TabButtons, Dropdown, Avatar, MultiSelect, Autocomplete } from 'frappe-ui'
+import {
+  Button,
+  Badge,
+  Avatar,
+  Dialog,
+  FormControl,
+  Dropdown,
+  TabButtons,
+  MultiSelect,
+  Checkbox,
+  toast,
+  Breadcrumbs,
+  TextInput
+} from 'frappe-ui'
+import {
+  ListView,
+  ListRow,
+  ListRowItem,
+  ListRows,
+  ListSelectBanner,
+  ListHeader,
+  ListHeaderItem,
+  ListFooter
+} from 'frappe-ui/experimental'
 import { mobileSidebarOpened, useSharedWithMe, useShareSecret, useUnshare, useShareOptions, useSecrets, useFolders, useBulkDeleteShares, useRoleUsers, useUpdateSharePermission, useVaultStats, useSaveRoleMemberPermission } from '../composables/vault'
 import EmptyState from '../components/EmptyState.vue'
 import SecretTypeIcon from '../components/SecretTypeIcon.vue'
@@ -691,6 +723,7 @@ const newShareType = ref('User')
 const newShareRecipient = ref('')
 const newSharePermission = ref('View Only')
 const newShareExpiresOn = ref('')
+const newShareCascade = ref(true)
 const isSharing = ref(false)
 
 // Revoke dialog state
@@ -745,15 +778,21 @@ const filteredList = computed(() => {
   return result
 })
 
-const columns = ref([
-  { label: 'Title', key: 'title', width: '18rem' },
+const defaultColumns = [
   { label: 'Type', key: 'secret_type', width: '8rem' },
   { label: 'Shared By', key: 'shared_by', width: '12rem' },
   { label: 'Shared With', key: 'shared_with', width: '14rem' },
   { label: 'Target Type', key: 'share_type', width: '8rem' },
   { label: 'Permission', key: 'permission_level', width: '10rem' },
   { label: 'Expires On', key: 'expires_on', width: '10rem' }
-])
+]
+
+const baseColumns = computed(() => {
+  const titleCol = { label: 'Title', key: 'title', width: 1 }
+  return [titleCol, ...defaultColumns]
+})
+
+const { columns, handleColumnWidthUpdated } = useColumnResize('manage-shares-column-widths', baseColumns)
 
 const formattedRows = computed(() => {
   return filteredList.value.map(s => {
@@ -848,6 +887,27 @@ const groupedItemOptions = computed(() => {
   }
 })
 
+const hasChildFolders = computed(() => {
+  if (newShareDoctype.value !== 'Vault Folder' || !foldersList.value?.length) return false
+
+  const selected = selectedItems.value.length ? selectedItems.value : (newShareItem.value ? [newShareItem.value] : [])
+  if (!selected.length) return false
+
+  const selectedFolderNames = new Set(
+    selected.map(item => (typeof item === 'object' && item !== null ? (item.value || item.name) : item)).filter(Boolean)
+  )
+
+  if (selectedFolderNames.size === 0) return false
+
+  return foldersList.value.some(f => f.parent_vault_folder && selectedFolderNames.has(f.parent_vault_folder))
+})
+
+watch(newShareDoctype, () => {
+  newShareItem.value = ''
+  selectedItems.value = []
+  newShareCascade.value = true
+})
+
 const userMembers = computed(() => {
   const users = shareOptions.value.users || []
   return users.map(u => ({
@@ -896,6 +956,7 @@ function openShareDialog() {
   selectedRoles.value = []
   newSharePermission.value = 'View Only'
   newShareExpiresOn.value = ''
+  newShareCascade.value = true
   showShareDialog.value = true
 
   secretsResource.fetch()
@@ -932,6 +993,7 @@ async function handleShareSecret() {
             user: email,
             permission_level: newSharePermission.value,
             expires_on: newShareExpiresOn.value || undefined,
+            cascade_permissions: newShareCascade.value ? 1 : 0,
           })
         }
       }
@@ -946,6 +1008,7 @@ async function handleShareSecret() {
             frappe_role: role,
             permission_level: newSharePermission.value,
             expires_on: newShareExpiresOn.value || undefined,
+            cascade_permissions: newShareCascade.value ? 1 : 0,
           })
         }
       }

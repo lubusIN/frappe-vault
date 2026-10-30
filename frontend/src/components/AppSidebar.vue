@@ -12,9 +12,10 @@
           :subtitle="sidebarConfig.header.subtitle"
           :logo="sidebarConfig.header.logo"
           :menu-items="sidebarConfig.header.menuItems"
+          class="vault-sidebar-header"
         />
 
-        <div class="flex-1 overflow-y-auto overflow-x-hidden">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden px-2 -mx-2">
           <!-- Main Links Section -->
           <nav class="flex flex-col gap-0.5 mt-2">
             <SidebarItem
@@ -23,11 +24,14 @@
               :id="item.id"
               :label="item.label"
               :icon="item.icon"
-              :to="item.to"
+              :route="item.to"
               :onClick="item.onClick"
-              :isActive="item.isActive"
+              :active="item.isActive"
               class="vault-sidebar-item cursor-pointer"
-              :class="{ 'notifications-btn-trigger': item.isNotification }"
+              :class="[
+                { 'notifications-btn-trigger': item.isNotification },
+                item.isActive ? '!bg-surface-elevation-3 !text-ink-gray-8 !shadow-sm' : ''
+              ]"
             >
               <template v-if="item.count" #suffix>
                 <Badge :label="String(item.count)" variant="subtle" :theme="item.isNotification && item.count > 0 ? 'red' : 'gray'" />
@@ -53,44 +57,145 @@
               <Tooltip text="New Folder" placement="right">
                 <Button
                   variant="ghost"
-                  icon="plus"
+                  icon="lucide-plus"
                   class="size-7 !p-1 text-ink-gray-6 hover:text-ink-gray-9 hover:bg-surface-gray-3 shrink-0 rounded-lg transition-colors"
                   @click.prevent.stop="openCreateFolderDialog"
                 />
               </Tooltip>
             </div>
 
-          <SidebarItem
-            v-for="folder in folders"
-            :key="folder.name"
-            :label="folder.folder_name"
-            :to="`/secrets?folder=${encodeURIComponent(folder.name)}`"
-            :isActive="checkActive(`/secrets?folder=${encodeURIComponent(folder.name)}`)"
-            class="group vault-sidebar-item"
-          >
-            <template #prefix>
-              <div class="flex items-center justify-center w-4 h-4">
+          <div v-show="!isSidebarCollapsed" class="w-full flex-1"><Tree v-if="folderTree.length" :nodes="folderTree" node-key="name" class="w-full">
+            <template #item="{ node, expanded, toggle, hasChildren }">
+              <router-link
+                :to="`/secrets?folder=${encodeURIComponent(node.name)}`"
+                @click.stop
+                class="flex h-7 min-w-0 flex-1 items-center rounded pl-0.5 pr-1.5 transition-colors focus:outline-none focus-visible:ring-0"
+                :class="
+                  checkActive(`/secrets?folder=${encodeURIComponent(node.name)}`)
+                    ? 'bg-surface-elevation-3 text-ink-gray-8 shadow-sm'
+                    : 'text-ink-gray-6 hover:bg-surface-gray-2'
+                "
+              >
+                <!-- Prefix Icon -->
                 <Icon
-                  :name="folder.icon || 'folder'"
-                  class="w-4 h-4 shrink-0"
+                  :name="(node.icon || 'folder').replace(/^lucide-/, '')"
+                  class="size-4 shrink-0 mr-2 text-ink-gray-5"
                 />
-              </div>
+
+                <!-- Label -->
+                <span class="truncate text-[13px] flex-1">{{ node.label }}</span>
+
+                <!-- Suffix Actions (Arrow on right!) -->
+                <div class="flex items-center gap-0.5 ml-auto" @click.prevent.stop>
+                  <!-- Dropdown for options -->
+                  <Dropdown v-if="getFolderOptions(node).length > 0" :options="getFolderOptions(node)">
+                    <template #default="{ open }">
+                      <Button
+                        variant="ghost"
+                        icon="lucide-more-horizontal"
+                        class="size-5 !p-0.5 text-ink-gray-6 transition-opacity opacity-0 group-hover/row:opacity-100"
+                        :class="{ 'bg-surface-gray-3 !opacity-100': open }"
+                      />
+                    </template>
+                  </Dropdown>
+                  <!-- Expand/Collapse toggle -->
+                  <Button
+                    v-if="hasChildren"
+                    variant="ghost"
+                    :icon="expanded ? 'lucide-chevron-down' : 'lucide-chevron-right'"
+                    class="size-5 !p-0.5 text-ink-gray-5"
+                    @click.prevent.stop="toggle"
+                  />
+                </div>
+              </router-link>
             </template>
-            <template #suffix>
-              <div v-if="getFolderOptions(folder).length > 0" class="opacity-0 group-hover:opacity-100 transition-opacity duration-150" @click.prevent.stop>
-                <Dropdown :options="getFolderOptions(folder)">
-                  <template #default="{ open }">
-                    <Button
-                      variant="ghost"
-                      icon="lucide-more-horizontal"
-                      class="!p-0.5 h-auto text-ink-gray-6"
-                      :class="{ 'bg-surface-gray-3': open }"
+          </Tree>
+          <div v-else class="px-2 py-1.5 text-xs text-ink-gray-5">
+            No folders yet.
+          </div></div>
+
+          <div v-show="isSidebarCollapsed" class="flex flex-col gap-0.5 w-full">
+            <template v-for="folder in folderTree" :key="folder.name">
+              <HoverCard
+                v-if="folder.children && folder.children.length > 0"
+                side="right"
+                align="start"
+                :offset="6"
+                :hoverDelay="80"
+                :leaveDelay="150"
+              >
+                <template #trigger="{ open }">
+                  <a
+                    :href="`/vault/secrets?folder=${encodeURIComponent(folder.name)}`"
+                    :aria-label="folder.folder_name"
+                    class="group flex h-7 items-center rounded-4 pl-2 transition cursor-pointer"
+                    :class="
+                      (isFolderOrDescendantActive(folder) || open)
+                        ? 'bg-surface-elevation-3 text-ink-gray-8 shadow-sm'
+                        : 'text-ink-gray-6 hover:bg-surface-gray-2'
+                    "
+                    @click.prevent="router.push(`/secrets?folder=${encodeURIComponent(folder.name)}`)"
+                  >
+                    <span class="grid shrink-0 place-items-center">
+                      <Icon
+                        :name="(folder.icon || 'folder').replace(/^lucide-/, '')"
+                        class="size-4 text-ink-gray-6"
+                      />
+                    </span>
+                  </a>
+                </template>
+                <template #default="{ close }">
+                  <div class="w-56 py-1.5 focus:outline-none">
+                    <router-link
+                      :to="`/secrets?folder=${encodeURIComponent(folder.name)}`"
+                      class="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-ink-gray-9 hover:bg-surface-gray-2 rounded-sm mx-1 transition-colors"
+                      :class="{ 'bg-surface-gray-2 font-bold': checkActive(`/secrets?folder=${encodeURIComponent(folder.name)}`) }"
+                      @click="close"
+                    >
+                      <Icon
+                        :name="(folder.icon || 'folder').replace(/^lucide-/, '')"
+                        class="size-4 text-ink-gray-6 shrink-0"
+                      />
+                      <span class="truncate flex-1">{{ folder.folder_name }}</span>
+                    </router-link>
+
+                    <div class="my-1 border-t border-outline-gray-1" />
+
+                    <div class="max-h-[260px] overflow-y-auto py-0.5">
+                      <router-link
+                        v-for="child in getAllDescendants(folder)"
+                        :key="child.name"
+                        :to="`/secrets?folder=${encodeURIComponent(child.name)}`"
+                        class="flex items-center gap-2 px-3 py-1.5 text-[13px] hover:bg-surface-gray-2 text-ink-gray-7 hover:text-ink-gray-9 transition-colors cursor-pointer rounded-sm mx-1"
+                        :class="{ 'font-semibold text-ink-gray-9 bg-surface-gray-2': checkActive(`/secrets?folder=${encodeURIComponent(child.name)}`) }"
+                        :style="{ paddingLeft: `${12 + (child.level * 12)}px` }"
+                        @click="close"
+                      >
+                        <Icon :name="(child.icon || 'folder').replace(/^lucide-/, '')" class="size-3.5 text-ink-gray-5 shrink-0" />
+                        <span class="truncate">{{ child.folder_name }}</span>
+                      </router-link>
+                    </div>
+                  </div>
+                </template>
+              </HoverCard>
+              <SidebarItem
+                v-else
+                :label="folder.folder_name"
+                :route="`/secrets?folder=${encodeURIComponent(folder.name)}`"
+                :active="isFolderOrDescendantActive(folder)"
+                class="vault-sidebar-item cursor-pointer"
+              >
+                <template #prefix>
+                  <div class="flex items-center justify-center w-4 h-4 shrink-0">
+                    <Icon
+                      :name="(folder.icon || 'folder').replace(/^lucide-/, '')"
+                      class="w-4 h-4 shrink-0 text-ink-gray-5"
                     />
-                  </template>
-                </Dropdown>
-              </div>
+                  </div>
+                </template>
+              </SidebarItem>
             </template>
-          </SidebarItem>
+          </div>
         </div>
       </div>
 
@@ -124,9 +229,10 @@
       <!-- Clear Demo Data Confirmation Dialog -->
       <Dialog
         v-model="showClearDemoConfirm"
-        :options="{ title: 'Clear Demo Data', size: 'sm' }"
+        title="Clear Demo Data"
+        size="sm"
       >
-        <template #body-content>
+        <template #default>
           <p class="text-sm text-ink-gray-7 leading-relaxed">
             Are you sure you want to remove all demo folders and secrets? Any changes made to demo secrets will be lost.
           </p>
@@ -201,9 +307,10 @@
       <!-- Create Folder Dialog -->
       <Dialog
         v-model="showCreateFolderDialog"
-        :options="{ title: 'New Folder', size: 'sm' }"
+        title="New Folder"
+        size="sm"
       >
-        <template #body-content>
+        <template #default>
           <div class="space-y-4">
             <FormControl
               label="Folder Name"
@@ -211,6 +318,25 @@
               placeholder="e.g. Work, Personal"
               @keyup.enter="handleCreateFolder"
             />
+            <div>
+              <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Parent Folder (Optional)</label>
+              <Combobox
+                v-model="newFolderParent"
+                :options="writableFolderOptions"
+                placeholder="Select parent folder..."
+                :disabled="isSubfolderMode || writableFolderOptions.length <= 1"
+                class="w-full text-sm"
+                :class="isSubfolderMode || writableFolderOptions.length <= 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
+              >
+                <template #item-prefix="{ item }">
+                  <div :style="{ paddingLeft: (item.level * 1.5) + 'rem' }" class="flex items-center">
+                    <span class="lucide-corner-down-right w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="item.level > 0" aria-hidden="true" />
+                    <span class="lucide-folder w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="item.value !== ''" aria-hidden="true" />
+                    <span class="lucide-align-horizontal-space-around w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else aria-hidden="true" />
+                  </div>
+                </template>
+              </Combobox>
+            </div>
             <div>
               <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Folder Icon</label>
               <IconPicker v-model="newFolderIcon" placeholder="Search icons..." class="w-full" />
@@ -234,9 +360,10 @@
       <!-- Edit Folder Dialog -->
       <Dialog
         v-model="showEditFolderDialog"
-        :options="{ title: 'Edit Folder', size: 'sm' }"
+        title="Edit Folder"
+        size="sm"
       >
-        <template #body-content>
+        <template #default>
           <div class="space-y-4">
             <FormControl
               label="Folder Name"
@@ -244,6 +371,25 @@
               placeholder="e.g. Work, Personal"
               @keyup.enter="handleEditFolder"
             />
+            <div>
+              <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Parent Folder (Optional)</label>
+              <Combobox
+                v-model="editFolderParent"
+                :options="editFolderParentOptions"
+                placeholder="Select parent folder..."
+                :disabled="editFolderParentOptions.length <= 1"
+                class="w-full text-sm"
+                :class="editFolderParentOptions.length <= 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
+              >
+                <template #item-prefix="{ item }">
+                  <div :style="{ paddingLeft: (item.level * 1.5) + 'rem' }" class="flex items-center">
+                    <span class="lucide-corner-down-right w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="item.level > 0" aria-hidden="true" />
+                    <span class="lucide-folder w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="item.value !== ''" aria-hidden="true" />
+                    <span class="lucide-align-horizontal-space-around w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else aria-hidden="true" />
+                  </div>
+                </template>
+              </Combobox>
+            </div>
             <div>
               <label class="block text-xs text-ink-gray-5 mb-1.5 font-medium">Folder Icon</label>
               <IconPicker v-model="editFolderIcon" placeholder="Search icons..." class="w-full" />
@@ -267,9 +413,10 @@
       <!-- Delete Folder Dialog -->
       <Dialog
         v-model="showDeleteFolderDialog"
-        :options="{ title: 'Delete Folder', size: 'sm' }"
+        title="Delete Folder"
+        size="sm"
       >
-        <template #body-content>
+        <template #default>
           <div class="space-y-3">
             <p class="text-sm text-ink-gray-7" v-if="loadingCount">Analyzing folder secrets...</p>
             <template v-else>
@@ -289,6 +436,39 @@
                 <p class="text-sm text-ink-gray-7 leading-relaxed">
                   Are you sure you want to delete folder <span class="font-semibold text-ink-gray-9">"{{ folderToDelete?.folder_name }}"</span>?
                 </p>
+              </div>
+
+              <!-- Subfolder Actions -->
+              <div class="space-y-3 mt-4" v-if="folderToDelete?.children?.length > 0">
+                <p class="text-sm font-medium text-ink-gray-9">What to do with subfolders?</p>
+                <FormControl
+                  type="select"
+                  v-model="deleteSubfolderAction"
+                  :options="[
+                    { label: folderToDelete.parent_vault_folder ? 'Move to Parent Level' : 'Move to Root Level', value: 'move_up' },
+                    { label: 'Move to specific folder...', value: 'move_to' },
+                    { label: 'Delete all subfolders', value: 'delete_all' }
+                  ]"
+                />
+
+                <div v-if="deleteSubfolderAction === 'move_to'" class="mt-2">
+                  <Combobox
+                    v-model="deleteTargetFolder"
+                    :options="deleteFolderTargetOptions"
+                    placeholder="Select target folder..."
+                    :disabled="deleteFolderTargetOptions.length <= 1"
+                    class="w-full text-sm"
+                    :class="deleteFolderTargetOptions.length <= 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
+                  >
+                    <template #item-prefix="{ item }">
+                      <div :style="{ paddingLeft: (item.level * 1.5) + 'rem' }" class="flex items-center">
+                        <span class="lucide-corner-down-right w-4 h-4 mr-2 text-ink-gray-4 shrink-0" v-if="item.level > 0" aria-hidden="true" />
+                        <span class="lucide-folder w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="item.value !== ''" aria-hidden="true" />
+                        <span class="lucide-align-horizontal-space-around w-4 h-4 mr-2 text-ink-gray-5 shrink-0" v-else aria-hidden="true" />
+                      </div>
+                    </template>
+                  </Combobox>
+                </div>
               </div>
               <div v-if="deleteFolderError" class="text-sm text-red-700 dark:text-red-300 bg-surface-red-1/40 p-2.5 rounded-lg border border-outline-red-1 font-medium leading-relaxed">
                 {{ deleteFolderError }}
@@ -326,14 +506,17 @@
         :folderTitle="folderToManageShares?.folder_name"
         :isOwnerOrAdmin="isManagingFolderOwnerOrAdmin"
       />
+
+      <!-- Settings Modal -->
+      <SettingsModal v-if="showSettingsModal" v-model="showSettingsModal" />
   </Sidebar>
 </template>
 
 <script setup>
-import { ref, computed, reactive, h } from 'vue'
+import { ref, computed, reactive, h, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Badge, Button, FeatherIcon, Tooltip, Dialog, Dropdown, FormControl, Checkbox, Sidebar, SidebarItem, SidebarHeader, SidebarCollapseToggle, createResource, toast } from 'frappe-ui'
-import { IconPicker, Icon } from 'frappe-ui/icons'
+import { Badge, Button, Tooltip, Dialog, Dropdown, FormControl, Checkbox, Sidebar, SidebarItem, Tree, Combobox, SidebarHeader, SidebarCollapseToggle, createResource, toast, Popover, HoverCard } from 'frappe-ui'
+import { IconPicker, Icon } from 'frappe-ui/experimental'
 import { useVaultStats, useFolders, useCreateFolder, useDeleteFolder, useUpdateFolder, useFolderSecrets, useGenerateDemoData, useClearDemoData, mobileSidebarOpened, isSidebarCollapsed } from '../composables/vault'
 import {
   visible,
@@ -344,6 +527,7 @@ import {
 import NotificationsPanel from './NotificationsPanel.vue'
 import ShareItemDialog from './ShareItemDialog.vue'
 import ManageFolderSharesDialog from './ManageFolderSharesDialog.vue'
+import SettingsModal from './SettingsModal.vue'
 import LayoutDashboard from '~icons/lucide/layout-dashboard'
 import HelpCircleIcon from '~icons/lucide/help-circle'
 import HeartIcon from '~icons/lucide/heart'
@@ -419,6 +603,8 @@ const deleteSecretsCount = ref(0)
 const deleteSecretsCheck = ref(false)
 const loadingCount = ref(false)
 const deleteFolderError = ref('')
+const deleteSubfolderAction = ref('move_up')
+const deleteTargetFolder = ref(null)
 
 const showShareFolderDialog = ref(false)
 const folderToShare = ref(null)
@@ -445,24 +631,93 @@ function parseFrappeError(error) {
 }
 
 
-function openCreateFolderDialog() {
+const newFolderParent = ref('')
+const isSubfolderMode = ref(false)
+const editFolderParent = ref('')
+
+const folderOptions = computed(() => {
+  const options = []
+  const traverse = (nodes, level = 0) => {
+    for (const node of nodes) {
+      options.push({ label: node.folder_name, value: node.name, level, can_write: node.can_write })
+      if (node.children?.length) {
+        traverse(node.children, level + 1)
+      }
+    }
+  }
+  traverse(folderTree.value)
+  return options
+})
+
+const writableFolderOptions = computed(() => {
+  const options = folderOptions.value.filter(o => o.can_write || o.value === folderToEdit.value?.parent_vault_folder)
+  return [
+    { label: '— Root Level —', value: '', level: 0 },
+    ...options
+  ]
+})
+
+const editFolderParentOptions = computed(() => {
+  if (!folderToEdit.value) return writableFolderOptions.value
+  const forbidden = new Set([folderToEdit.value.name, ...getAllDescendants(folderToEdit.value).map(d => d.name)])
+  return writableFolderOptions.value.filter(o => o.value === '' || !forbidden.has(o.value))
+})
+
+const deleteFolderTargetOptions = computed(() => {
+  if (!folderToDelete.value) return writableFolderOptions.value
+  const forbidden = new Set([folderToDelete.value.name, ...getAllDescendants(folderToDelete.value).map(d => d.name)])
+  return writableFolderOptions.value.filter(o => o.value === '' || !forbidden.has(o.value))
+})
+
+function openCreateFolderDialog(parent = null) {
   newFolderName.value = ''
   newFolderIcon.value = ''
+  newFolderParent.value = parent ? parent.name : ''
+  isSubfolderMode.value = !!parent
   showCreateFolderDialog.value = true
 }
 
 async function handleCreateFolder() {
   if (!newFolderName.value.trim()) return
   try {
+    const parentVal = typeof newFolderParent.value === 'object'
+      ? (newFolderParent.value?.value || '')
+      : (newFolderParent.value || '')
+
     await createFolderResource.submit({
       folder_name: newFolderName.value.trim(),
       icon: newFolderIcon.value || 'folder',
+      parent_vault_folder: parentVal,
+      is_group: 0
     })
     showCreateFolderDialog.value = false
     foldersResource.reload()
     stats.reload()
   } catch (err) {
+    toast.error(parseFrappeError(err))
   }
+}
+
+
+function isFolderOrDescendantActive(folder) {
+  if (checkActive(`/secrets?folder=${encodeURIComponent(folder.name)}`)) return true
+  if (folder.children) {
+    for (const child of folder.children) {
+      if (isFolderOrDescendantActive(child)) return true
+    }
+  }
+  return false
+}
+
+function getAllDescendants(folder, level = 0) {
+  let descendants = []
+  if (folder.children) {
+    folder.children.forEach(child => {
+      descendants.push({ ...child, level })
+      descendants = descendants.concat(getAllDescendants(child, level + 1))
+    })
+  }
+  return descendants
 }
 
 function getFolderOptions(folder) {
@@ -492,18 +747,24 @@ function getFolderOptions(folder) {
 
   if (folder.can_write) {
     options.push({
+      label: 'New Subfolder',
+      icon: 'lucide-plus',
+      onClick: () => openCreateFolderDialog(folder)
+    })
+    options.push({
       label: 'Edit Folder',
-      icon: 'edit-2',
+      icon: 'lucide-pen-line',
       onClick: () => {
         folderToEdit.value = folder
         editFolderName.value = folder.folder_name
         editFolderIcon.value = folder.icon || ''
+        editFolderParent.value = folder.parent_vault_folder || ''
         showEditFolderDialog.value = true
       }
     })
     options.push({
       label: 'Delete Folder',
-      icon: 'trash-2',
+      icon: 'lucide-trash-2',
       onClick: () => openDeleteFolderDialog(folder)
     })
   }
@@ -512,10 +773,12 @@ function getFolderOptions(folder) {
 
 function openDeleteFolderDialog(folder) {
   folderToDelete.value = folder
-  deleteSecretsCount.value = 0
-  deleteSecretsCheck.value = false
-  loadingCount.value = true
+  deleteSecretsCheck.value = true
   deleteFolderError.value = ''
+  deleteSecretsCount.value = 0
+  loadingCount.value = true
+  deleteSubfolderAction.value = 'move_up'
+  deleteTargetFolder.value = ''
   showDeleteFolderDialog.value = true
 
   folderSecretsResource.submit({ folder_name: folder.name }).then((res) => {
@@ -529,15 +792,21 @@ function openDeleteFolderDialog(folder) {
 async function handleEditFolder() {
   if (!editFolderName.value.trim() || !folderToEdit.value) return
   try {
+    const parentVal = typeof editFolderParent.value === 'object'
+      ? (editFolderParent.value?.value || '')
+      : (editFolderParent.value || '')
+
     await updateFolderResource.submit({
       name: folderToEdit.value.name,
       folder_name: editFolderName.value.trim(),
       icon: editFolderIcon.value || 'folder',
+      parent_vault_folder: parentVal,
     })
     showEditFolderDialog.value = false
     folderToEdit.value = null
     foldersResource.reload()
   } catch (err) {
+    toast.error(parseFrappeError(err))
   }
 }
 
@@ -545,9 +814,15 @@ async function handleDeleteFolder() {
   if (!folderToDelete.value) return
   deleteFolderError.value = ''
   try {
+    const targetVal = typeof deleteTargetFolder.value === 'object'
+      ? (deleteTargetFolder.value?.value || null)
+      : (deleteTargetFolder.value || null)
+
     await deleteFolderResource.submit({
       name: folderToDelete.value.name,
       delete_secrets: deleteSecretsCount.value > 0 && deleteSecretsCheck.value ? 1 : 0,
+      subfolder_action: deleteSubfolderAction.value,
+      target_folder: targetVal,
     })
 
     if (route.query.folder === folderToDelete.value.name || route.name === 'SecretDetail') {
@@ -604,9 +879,10 @@ const sidebarCollapsedComputed = computed({
 })
 
 const showAboutModal = ref(false)
+const showSettingsModal = ref(false)
 
 const vaultVersion = computed(() => {
-  return window.frappe?.boot?.versions?.frappe_vault || '1.1.0'
+  return window.frappe?.boot?.versions?.frappe_vault || '1.2.0'
 })
 
 const aboutLinks = [
@@ -617,6 +893,71 @@ const aboutLinks = [
 ]
 
 const folders = computed(() => foldersResource.data || [])
+
+const folderTree = ref([])
+
+watch(
+  () => foldersResource.data,
+  (allFolders) => {
+    const newTree = []
+    const map = {}
+
+    const preserveMap = {}
+    const scan = (nodes) => {
+      for (const n of nodes) {
+        preserveMap[n.name] = n.expanded
+        if (n.children) scan(n.children)
+      }
+    }
+    scan(folderTree.value)
+
+    const savedExpandedState = JSON.parse(localStorage.getItem('vault_folder_expanded_state') || '{}')
+
+    if (allFolders) {
+      allFolders.forEach(f => {
+        let isExpanded = false // Default to collapsed
+        if (preserveMap[f.name] !== undefined) {
+          isExpanded = preserveMap[f.name]
+        } else if (savedExpandedState[f.name] !== undefined) {
+          isExpanded = savedExpandedState[f.name]
+        }
+
+        map[f.name] = {
+          ...f,
+          label: f.folder_name,
+          children: [],
+          expanded: isExpanded
+        }
+      })
+
+      allFolders.forEach(f => {
+        if (f.parent_vault_folder && map[f.parent_vault_folder]) {
+          map[f.parent_vault_folder].children.push(map[f.name])
+        } else {
+          newTree.push(map[f.name])
+        }
+      })
+    }
+    folderTree.value = newTree
+  },
+  { immediate: true }
+)
+
+watch(
+  folderTree,
+  (newTree) => {
+    const state = JSON.parse(localStorage.getItem('vault_folder_expanded_state') || '{}')
+    const scan = (nodes) => {
+      for (const n of nodes) {
+        state[n.name] = n.expanded
+        if (n.children) scan(n.children)
+      }
+    }
+    scan(newTree)
+    localStorage.setItem('vault_folder_expanded_state', JSON.stringify(state))
+  },
+  { deep: true }
+)
 
 const userName = computed(() => {
   if (window.frappe?.boot?.user) {
@@ -662,7 +1003,7 @@ function checkActive(to) {
   }
 
   if (pathStr === '/') {
-    return route.path === '/'
+    return route.path === '/' || route.path === '/dashboard'
   }
 
   if (pathStr === '/secrets') {
@@ -673,13 +1014,6 @@ function checkActive(to) {
   }
 
   return route.path === pathStr || route.path.startsWith(pathStr + '/')
-}
-
-function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme')
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
-  document.documentElement.setAttribute('data-theme', newTheme)
-  localStorage.setItem('theme', newTheme)
 }
 
 const sidebarConfig = reactive({
@@ -703,10 +1037,11 @@ const sidebarConfig = reactive({
               }
             ]
           },
+
           {
-            label: 'Toggle Theme',
-            icon: 'lucide-moon',
-            onClick: toggleTheme
+            icon: 'lucide-settings',
+            label: 'Settings',
+            onClick: () => { showSettingsModal.value = true }
           },
           {
             icon: 'lucide-info',

@@ -65,6 +65,7 @@
               v-for="column in columns"
               :key="column.key"
               :item="column"
+              @columnWidthUpdated="handleColumnWidthUpdated"
             />
           </ListHeader>
           <ListRows class="sm:mx-5 mx-3">
@@ -87,7 +88,7 @@
                     <template v-if="row.shared_doctype === 'Vault Folder'">
                       <div class="flex items-center gap-2">
                         <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-surface-gray-3 text-ink-gray-7">
-                          <FeatherIcon :name="getFolderIcon(row.title, foldersResource.data)" class="w-3 h-3" />
+                          <Icon :name="getFolderIcon(row.title, foldersResource.data).replace(/^lucide-/, '')" class="w-3.5 h-3.5" />
                         </div>
                         <span>Folder</span>
                       </div>
@@ -142,7 +143,7 @@
       </template>
 
       <!-- Empty state -->
-      <EmptyState v-else icon="users" title="Nothing shared with you" description="When someone shares a secret with you, it will appear here" />
+      <EmptyState v-else icon="lucide-users" title="Nothing shared with you" description="When someone shares a secret with you, it will appear here" />
     </div>
   </div>
 </template>
@@ -151,8 +152,9 @@
 import ViewControlsBar from '../components/ViewControlsBar.vue'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import RefreshIcon from '../components/RefreshIcon.vue'
-import { Badge, Button, TextInput, FeatherIcon, ListView, ListHeader, ListHeaderItem, ListRows, ListRow, ListRowItem, ListSelectBanner, ListFooter, Breadcrumbs, toast } from 'frappe-ui'
+import { useColumnResize } from '../composables/useColumnResize'
+import { Badge, Button, TextInput, Breadcrumbs, toast } from 'frappe-ui'
+import { ListView, ListHeader, ListHeaderItem, ListRows, ListRow, ListRowItem, ListSelectBanner, ListFooter } from 'frappe-ui/experimental'
 import { mobileSidebarOpened, useSharedWithMe, useFolders } from '../composables/vault'
 import { createResource } from 'frappe-ui'
 import EmptyState from '../components/EmptyState.vue'
@@ -194,13 +196,19 @@ const filteredList = computed(() => {
   return result || []
 })
 
-const columns = ref([
-  { label: 'Title', key: 'title', width: '18rem' },
+const defaultColumns = [
   { label: 'Type', key: 'secret_type', width: '10rem' },
   { label: 'Shared By', key: 'shared_by', width: '14rem' },
   { label: 'Permission', key: 'permission_level', width: '11rem' },
   { label: 'Expires On', key: 'expires_on', width: '11rem' }
-])
+]
+
+const baseColumns = computed(() => {
+  const titleCol = { label: 'Title', key: 'title', width: 1 }
+  return [titleCol, ...defaultColumns]
+})
+
+const { columns, handleColumnWidthUpdated } = useColumnResize('shared-with-me-column-widths', baseColumns)
 
 const formattedRows = computed(() => {
   return filteredList.value.map(s => {

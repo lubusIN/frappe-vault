@@ -7,6 +7,7 @@ DEMO_FOLDERS = [
     {"folder_name": "Finance & Accounting", "icon": "dollar-sign"},
     {"folder_name": "Marketing & Sales", "icon": "trending-up"},
     {"folder_name": "Executive & Legal", "icon": "shield"},
+    {"folder_name": "Cloud Services", "icon": "cloud", "parent_vault_folder": "Infrastructure"},
 ]
 
 DEMO_FOLDER_SHARES = [
@@ -110,6 +111,17 @@ DEMO_SECRETS = [
         "notes": "Live chat widget API integration.",
     },
     # Infrastructure
+    {
+        "title": "AWS Root Account (Requires 2FA)",
+        "secret_type": "Password",
+        "folder": "Cloud Services",
+        "username": "root@company-demo.local",
+        "password": "AWS#R00t!2026",
+        "url": "https://aws.amazon.com/console",
+        "totp_secret": "JBSWY3DPEHPK3PXP",
+        "notes": "Master AWS root account. 2FA is required for login.",
+        "is_bookmark": 1,
+    },
     {
         "title": "Production DB Cluster",
         "secret_type": "Database",
