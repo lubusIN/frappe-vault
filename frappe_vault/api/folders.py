@@ -83,6 +83,9 @@ def create(
     )
     doc.insert()
 
+    if parent_vault_folder:
+        frappe.db.set_value("Vault Folder", parent_vault_folder, "is_group", 1)
+
     # Notify Vault Admins of new folder creation
     from frappe_vault.services.notification_service import notify_vault_admins
 
@@ -130,11 +133,26 @@ def delete(
         elif subfolder_action == "move_to" and target_folder:
             new_parent = target_folder
 
+        if new_parent:
+            frappe.db.set_value("Vault Folder", new_parent, "is_group", 1)
+
         for child in children:
-            frappe.db.set_value("Vault Folder", child, "parent_vault_folder", new_parent)
-            # Fetch and save doc to rebuild nested set indices
-            c_doc = frappe.get_doc("Vault Folder", child)
-            c_doc.save(ignore_permissions=True)
+            has_child_children = frappe.db.count("Vault Folder", {"parent_vault_folder": child})
+            child_is_group = 1 if has_child_children else 0
+
+            frappe.db.set_value(
+                "Vault Folder",
+                child,
+                {
+                    "parent_vault_folder": new_parent,
+                    "old_parent": new_parent or "",
+                    "is_group": child_is_group,
+                },
+                update_modified=False,
+            )
+
+        # Clear group flag on deleting folder so NestedSet on_trash allows deletion
+        frappe.db.set_value("Vault Folder", name, "is_group", 0, update_modified=False)
 
     secrets = frappe.get_all("Vault Secret", filters={"folder": name}, fields=["name"])
     if should_delete_secrets:
@@ -161,6 +179,18 @@ def delete(
     frappe.delete_doc(
         "Vault Folder", name, force=True, ignore_doctypes=["Vault Audit Log"], ignore_permissions=True
     )
+
+    # Clean up old parent's is_group if it now has no children
+    old_parent = folder_doc.parent_vault_folder
+    if old_parent and frappe.db.exists("Vault Folder", old_parent):
+        remaining_in_old_parent = frappe.db.count("Vault Folder", {"parent_vault_folder": old_parent})
+        if not remaining_in_old_parent:
+            frappe.db.set_value("Vault Folder", old_parent, "is_group", 0, update_modified=False)
+
+    # Rebuild NestedSet tree so left and right indices are completely consistent
+    from frappe.utils.nestedset import rebuild_tree
+
+    rebuild_tree("Vault Folder")
 
     # Notify Vault Admins
     from frappe_vault.services.notification_service import notify_vault_admins
@@ -198,6 +228,7 @@ def update(
         name = _rename_doc("Vault Folder", name, folder_name)
 
     doc = frappe.get_doc("Vault Folder", name)
+    old_parent = doc.parent_vault_folder
     if icon is not None:
         doc.icon = icon
     if parent_vault_folder is not None:
@@ -210,7 +241,20 @@ def update(
     if has_children:
         doc.is_group = 1
 
+    if doc.parent_vault_folder:
+        frappe.db.set_value("Vault Folder", doc.parent_vault_folder, "is_group", 1)
+
     doc.save()
+
+    if old_parent and old_parent != doc.parent_vault_folder and frappe.db.exists("Vault Folder", old_parent):
+        remaining = frappe.db.count("Vault Folder", {"parent_vault_folder": old_parent})
+        if not remaining:
+            frappe.db.set_value("Vault Folder", old_parent, "is_group", 0)
+
+    from frappe.utils.nestedset import rebuild_tree
+
+    rebuild_tree("Vault Folder")
+
     return {"name": doc.name}
 
 
