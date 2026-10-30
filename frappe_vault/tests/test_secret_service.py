@@ -18,7 +18,18 @@ class TestSecretService(FrappeTestCase):
         # Ensure clean slate for test secrets
         frappe.db.delete(
             "Vault Secret",
-            {"title": ["in", ["Test Service Secret", "Test Bookmark Secret", "Test Update Secret", "User Owned Secret", "Admin Secret"]]},
+            {
+                "title": [
+                    "in",
+                    [
+                        "Test Service Secret",
+                        "Test Bookmark Secret",
+                        "Test Update Secret",
+                        "User Owned Secret",
+                        "Admin Secret",
+                    ],
+                ]
+            },
         )
         frappe.db.commit()
 
@@ -26,7 +37,18 @@ class TestSecretService(FrappeTestCase):
         frappe.set_user("Administrator")
         frappe.db.delete(
             "Vault Secret",
-            {"title": ["in", ["Test Service Secret", "Test Bookmark Secret", "Test Update Secret", "User Owned Secret", "Admin Secret"]]},
+            {
+                "title": [
+                    "in",
+                    [
+                        "Test Service Secret",
+                        "Test Bookmark Secret",
+                        "Test Update Secret",
+                        "User Owned Secret",
+                        "Admin Secret",
+                    ],
+                ]
+            },
         )
         frappe.db.commit()
 
