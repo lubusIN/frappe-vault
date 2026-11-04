@@ -1,4 +1,4 @@
-<p align="center"><img width="160" src=".github/assets/logo.svg"></p>
+<p align="center"><img height="50" src=".github/assets/logo.svg"></p>
 
 <img src=".github/assets/banner.png" />
 
@@ -118,14 +118,14 @@ Explore more open-source tools we're building for the Frappe ecosystem:
         <img src="https://raw.githubusercontent.com/lubusIN/frappe-brewery/main/.github/assets/logo.svg" alt="Frappe Brewery" height="60">
       </a>
       <br>
-      An open app registry for the Frappe Apps.   
+      An open app registry for the Frappe Apps.
     </td>
     <td width="50%" valign="top">
       <a href="https://github.com/lubusIN/wp-frappe-data-store">
         <img src="https://raw.githubusercontent.com/lubusIN/wp-frappe-data-store/main/.github/assets/logo.svg" alt="WP Frappe Data Store" height="60">
       </a>
       <br>
-        React Data store for WordPress.
+      React Data store for WordPress.
     </td>
   </tr>
 </table>
