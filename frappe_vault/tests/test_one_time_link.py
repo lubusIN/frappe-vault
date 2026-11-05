@@ -59,3 +59,43 @@ class TestOneTimeLink(FrappeTestCase):
         self.assertEqual(consumed.get("title"), "Test One-Time Link Secret")
 
         delete_secret(secret.get("name"))
+
+    def test_passphrase_link_with_missing_passphrase_is_refused(self):
+        secret = create_secret(
+            {"title": "Test One-Time Link Secret", "secret_type": "Password", "password": "LinkPassword123!"}
+        )
+        link_doc = create_one_time_link(secret_name=secret.get("name"), passphrase="Pass-123!", max_views=2)
+
+        self.assertRaises(frappe.ValidationError, consume_one_time_link, token=link_doc.get("token"))
+
+        delete_secret(secret.get("name"))
+
+    def test_undecryptable_passphrase_fails_closed(self):
+        # If the stored passphrase can no longer be decrypted (rotated site
+        # encryption key, corrupted row), the link must refuse to open — never
+        # fall back to treating it as a link without a passphrase.
+        secret = create_secret(
+            {"title": "Test One-Time Link Secret", "secret_type": "Password", "password": "LinkPassword123!"}
+        )
+        link_doc = create_one_time_link(secret_name=secret.get("name"), passphrase="Pass-123!", max_views=2)
+
+        auth = frappe.qb.Table("__Auth")
+        (
+            frappe.qb.update(auth)
+            .set(auth.password, "not-a-decryptable-value")
+            .where(
+                (auth.doctype == "Vault One Time Link")
+                & (auth.name == link_doc.get("name"))
+                & (auth.fieldname == "passphrase")
+            )
+        ).run()
+
+        for attempt in (None, "Pass-123!"):
+            self.assertRaises(
+                frappe.ValidationError,
+                consume_one_time_link,
+                token=link_doc.get("token"),
+                passphrase=attempt,
+            )
+
+        delete_secret(secret.get("name"))

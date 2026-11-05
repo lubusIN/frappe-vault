@@ -15,26 +15,13 @@ def decrypt_secret_field(doctype: str, name: str, fieldname: str) -> str:
     Returns:
         Decrypted string or empty string
     """
+    # get_decrypted_password reads __Auth directly without a permission check, so
+    # it also serves guests opening a one-time link. An unset field returns None.
     try:
-        val = get_decrypted_password(doctype, name, fieldname, raise_exception=False)
-        if val:
-            return val
+        return get_decrypted_password(doctype, name, fieldname, raise_exception=False) or ""
     except Exception:
         frappe.log_error(title=f"Vault Secret Decryption Warning ({name}.{fieldname})")
-
-    # Direct Auth table fallback for unauthenticated guest link consumers
-    try:
-        auth_val = frappe.db.get_value(
-            "__Auth", {"doctype": doctype, "docname": name, "fieldname": fieldname}, "password"
-        )
-        if auth_val:
-            from frappe.utils.password import decrypt
-
-            return decrypt(auth_val)
-    except Exception:
-        frappe.log_error(title=f"Vault Auth Fallback Decryption Warning ({name}.{fieldname})")
-
-    return ""
+        return ""
 
 
 def get_decrypted_secret_data(secret_name: str, ignore_permissions: bool = False) -> dict:

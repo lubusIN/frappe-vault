@@ -948,6 +948,24 @@ def create_one_time_link(
     }
 
 
+def _one_time_link_has_passphrase(link_name: str) -> bool:
+    """Whether a passphrase is stored for this link — checked without decrypting it."""
+    auth = frappe.qb.Table("__Auth")
+    return bool(
+        frappe.qb.from_(auth)
+        .select(auth.name)
+        .where(
+            (auth.doctype == "Vault One Time Link")
+            & (auth.name == link_name)
+            & (auth.fieldname == "passphrase")
+            & (auth.password.isnotnull())
+            & (auth.password != "")
+        )
+        .limit(1)
+        .run()
+    )
+
+
 def consume_one_time_link(token: str, passphrase: str = None) -> dict:
     """Consume a one-time link and return the secret data."""
     link_name = frappe.db.get_value("Vault One Time Link", {"token": token}, "name")
@@ -960,38 +978,30 @@ def consume_one_time_link(token: str, passphrase: str = None) -> dict:
     if not link.is_valid():
         frappe.throw(_("This link has expired or been consumed"))
 
-    # Verify passphrase if configured
-    stored_passphrase = None
-    try:
+    # Verify passphrase if configured. Fail closed: whether a passphrase is set is
+    # decided from the stored row alone, so a link that has one can never open
+    # just because decrypting it failed (e.g. a rotated site encryption key).
+    if _one_time_link_has_passphrase(link.name):
+        import hmac
+
         from frappe.utils.password import get_decrypted_password
 
         stored_passphrase = get_decrypted_password(
             "Vault One Time Link", link.name, "passphrase", raise_exception=False
         )
-    except Exception:
-        pass
-
-    if not stored_passphrase:
-        try:
-            auth_val = frappe.db.get_value(
-                "__Auth",
-                {"doctype": "Vault One Time Link", "docname": link.name, "fieldname": "passphrase"},
-                "password",
+        if not stored_passphrase:
+            frappe.log_error(
+                title="Vault One Time Link Passphrase Error",
+                message=f"Passphrase for one-time link {link.name} could not be decrypted",
+                reference_doctype="Vault One Time Link",
+                reference_name=link.name,
             )
-            if auth_val:
-                from frappe.utils.password import decrypt
+            frappe.throw(_("This link cannot be opened. Ask the sender for a new one."))
 
-                stored_passphrase = decrypt(auth_val)
-        except Exception:
-            pass
-
-    if stored_passphrase:
-        if not passphrase:
-            frappe.throw(_("Invalid passphrase"))
-        import hmac
-
-        # Use constant-time comparison to prevent timing attacks
-        if not hmac.compare_digest(passphrase.encode("utf-8"), stored_passphrase.encode("utf-8")):
+        # Constant-time comparison to prevent timing attacks
+        if not passphrase or not hmac.compare_digest(
+            passphrase.encode("utf-8"), stored_passphrase.encode("utf-8")
+        ):
             frappe.throw(_("Invalid passphrase"))
 
     # Get secret data
