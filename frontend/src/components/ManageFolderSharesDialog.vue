@@ -1,13 +1,11 @@
 <template>
   <Dialog
     :modelValue="modelValue"
-    :options="{
-      title: dialogTitle,
-      size: 'lg',
-    }"
+    :title="dialogTitle"
+    size="lg"
     @update:modelValue="val => emit('update:modelValue', val)"
   >
-    <template #body-content>
+    <template #default>
       <div class="flex flex-col gap-3 py-1 min-h-[180px]">
         <!-- Loading State -->
         <div v-if="loading" class="flex flex-col items-center justify-center py-12 gap-3">
@@ -32,9 +30,9 @@
             <!-- Left: Icon + Info -->
             <div class="flex items-center gap-3.5 min-w-0">
               <div class="w-9 h-9 rounded-full bg-surface-gray-2 border border-outline-gray-1 shadow-2xs flex items-center justify-center shrink-0">
-                <FeatherIcon
-                  :name="item.share_type === 'Role' ? 'shield' : (item.user_count > 1 ? 'users' : 'user')"
-                  class="w-4.5 h-4.5 text-ink-gray-5"
+                <span
+                  :class="['lucide-' + (item.share_type === 'Role' ? 'shield' : (item.user_count > 1 ? 'users' : 'user')), 'w-4.5 h-4.5 text-ink-gray-5']"
+                  aria-hidden="true"
                 />
               </div>
               <div class="min-w-0">
@@ -75,7 +73,7 @@
         <!-- Empty State -->
         <div v-else class="p-8 bg-surface-gray-2 border border-dashed border-outline-gray-1 rounded-2xl text-center shadow-sm">
           <div class="w-10 h-10 rounded-full bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center mx-auto text-ink-gray-4 mb-3 shrink-0">
-            <FeatherIcon name="users" class="w-5 h-5" />
+            <span class="lucide-users w-5 h-5" aria-hidden="true" />
           </div>
           <p class="text-sm font-semibold text-ink-gray-9 leading-snug">Not Shared Yet</p>
           <p class="text-xs text-ink-gray-5 mt-1 max-w-[280px] mx-auto leading-normal font-medium">
@@ -99,9 +97,9 @@
           >
             <div class="flex items-center gap-3.5 min-w-0">
               <div class="w-9 h-9 rounded-full bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center shrink-0">
-                <FeatherIcon
-                  :name="item.share_type === 'Role' ? 'shield' : 'user'"
-                  class="w-4.5 h-4.5 text-ink-gray-4"
+                <span
+                  :class="['lucide-' + (item.share_type === 'Role' ? 'shield' : 'user'), 'w-4.5 h-4.5 text-ink-gray-4']"
+                  aria-hidden="true"
                 />
               </div>
               <div class="min-w-0">
@@ -123,7 +121,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Dialog, Button, Badge, FeatherIcon, toast } from 'frappe-ui'
+import { Dialog, Button, Badge, toast } from 'frappe-ui'
 import { useFolderShares, useUnshare } from '../composables/vault'
 
 const props = defineProps({

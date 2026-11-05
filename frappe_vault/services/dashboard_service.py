@@ -307,18 +307,43 @@ def get_secrets_by_folder(
     from_date: str | None = None, to_date: str | None = None, user: str | None = None
 ) -> dict:
     """DonutChart config for Secrets by Folder breakdown."""
-    user_clause = f"WHERE owner = {frappe.db.escape(user)}" if user else ""
 
-    folder_counts = frappe.db.sql(  # nosemgrep
-        f"""
-        SELECT COALESCE(folder, 'Unfiled') as folder_name, COUNT(*) as count
-        FROM `tabVault Secret`
-        {user_clause}
-        GROUP BY folder
-        ORDER BY count DESC
-    """,
-        as_dict=True,
-    )
+    if not user:
+        # Admin gets everything, fast SQL is fine
+        folder_counts = frappe.db.sql(  # nosemgrep
+            """
+            SELECT
+                COALESCE(
+                    IF(f.parent_vault_folder IS NOT NULL AND f.parent_vault_folder != '',
+                       CONCAT(f.parent_vault_folder, ' / ', s.folder),
+                       s.folder),
+                    'Unfiled'
+                ) as folder_name,
+                COUNT(s.name) as count
+            FROM `tabVault Secret` s
+            LEFT JOIN `tabVault Folder` f ON s.folder = f.name
+            GROUP BY s.folder
+            ORDER BY count DESC
+        """,
+            as_dict=True,
+        )
+    else:
+        # Normal users need permission hooks for shared folders
+        secrets = frappe.get_list("Vault Secret", fields=["folder", "name"], limit=50000)
+        folders = frappe.get_all("Vault Folder", fields=["name", "parent_vault_folder"])
+        folder_map = {f.name: f.parent_vault_folder for f in folders}
+
+        counts = {}
+        for s in secrets:
+            fname = s.folder or "Unfiled"
+            if fname != "Unfiled":
+                parent = folder_map.get(fname)
+                if parent:
+                    fname = f"{parent} / {fname}"
+            counts[fname] = counts.get(fname, 0) + 1
+
+        folder_counts = [{"folder_name": k, "count": v} for k, v in counts.items()]
+        folder_counts = sorted(folder_counts, key=lambda x: x["count"], reverse=True)
 
     return {
         "title": _("Secrets by Folder"),

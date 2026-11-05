@@ -8,7 +8,7 @@
   "share_type", "user", "frappe_role",
   "column_break_1",
   "permission_level", "expires_on",
-  "reference_section", "shared_doctype", "shared_name",
+  "reference_section", "shared_doctype", "shared_name", "cascade_permissions",
   "meta_section", "shared_by", "is_revoked", "revoked_by", "is_role_override", "is_custom_override", "hidden_from_recipient"
  ],
  "fields": [
@@ -21,6 +21,7 @@
   {"fieldname": "reference_section", "fieldtype": "Section Break", "label": "Shared Item"},
   {"default": "Vault Secret", "fieldname": "shared_doctype", "fieldtype": "Select", "label": "Shared DocType", "options": "Vault Secret\nVault Folder", "reqd": 1},
   {"fieldname": "shared_name", "fieldtype": "Dynamic Link", "label": "Shared Document", "options": "shared_doctype", "reqd": 1},
+  {"default": "0", "depends_on": "eval:doc.shared_doctype === 'Vault Folder'", "fieldname": "cascade_permissions", "fieldtype": "Check", "label": "Apply to Subfolders"},
   {"fieldname": "meta_section", "fieldtype": "Section Break", "label": "Meta"},
   {"fieldname": "shared_by", "fieldtype": "Link", "label": "Shared By", "options": "User", "read_only": 1},
   {"default": "0", "fieldname": "is_revoked", "fieldtype": "Check", "label": "Is Revoked", "read_only": 1},

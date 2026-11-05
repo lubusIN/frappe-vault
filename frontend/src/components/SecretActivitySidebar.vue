@@ -25,7 +25,7 @@
             <div v-else-if="activityList.length" class="relative space-y-6 before:absolute before:top-2 before:bottom-2 before:left-2.5 before:w-px before:bg-outline-gray-2 py-1">
               <div v-for="item in activityList" :key="item.name" class="relative flex items-start gap-3.5">
                 <div class="w-5 h-5 flex items-center justify-center shrink-0 relative text-ink-gray-5 bg-surface-base mt-0.5">
-                  <FeatherIcon :name="actionIcons[item.action] || 'activity'" class="w-4 h-4" />
+                  <span :class="['lucide-' + (actionIcons[item.action] || 'activity'), 'w-4 h-4']" aria-hidden="true" />
                 </div>
                 <div class="min-w-0 flex-1 flex flex-col gap-1.5">
                   <div class="flex items-start justify-between w-full gap-4">
@@ -65,7 +65,7 @@
 
             <div v-if="!isOwnerOrAdmin" class="p-4 bg-surface-gray-2 border border-outline-gray-1 rounded-xl text-sm leading-relaxed text-ink-gray-7 font-medium shadow-sm flex items-start gap-3">
               <div class="w-9 h-9 rounded-full bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center shrink-0 text-ink-gray-7">
-                <FeatherIcon name="share-2" class="w-4.5 h-4.5" />
+                <span class="lucide-share-2 w-4.5 h-4.5" aria-hidden="true" />
               </div>
               <div>
                 <p class="font-bold text-ink-gray-9 leading-normal">Shared Secret Access</p>
@@ -85,9 +85,9 @@
                 >
                   <div class="flex items-center gap-3.5 min-w-0">
                     <div class="w-9 h-9 rounded-full bg-surface-gray-2 border border-outline-gray-1 shadow-2xs flex items-center justify-center shrink-0">
-                      <FeatherIcon
-                        :name="item.share_type === 'UserGroup' || item.user_count > 1 ? 'users' : (item.share_type === 'Role' ? 'shield' : 'user')"
-                        class="w-4.5 h-4.5 text-ink-gray-5"
+                      <span
+                        :class="['lucide-' + (item.share_type === 'UserGroup' || item.user_count > 1 ? 'users' : (item.share_type === 'Role' ? 'shield' : 'user')), 'w-4.5 h-4.5 text-ink-gray-5']"
+                        aria-hidden="true"
                       />
                     </div>
                     <div class="min-w-0">
@@ -179,7 +179,7 @@
 
               <div v-else class="p-8 bg-surface-gray-2 border border-dashed border-outline-gray-1 rounded-2xl text-center shadow-sm">
                 <div class="w-10 h-10 rounded-full bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center mx-auto text-ink-gray-4 mb-3 shrink-0">
-                  <FeatherIcon name="users" class="w-5 h-5" />
+                  <span class="lucide-users w-5 h-5" aria-hidden="true" />
                 </div>
                 <p class="text-sm font-semibold text-ink-gray-9 leading-snug">Not Shared Yet</p>
                 <p class="text-xs text-ink-gray-5 mt-1 max-w-[280px] mx-auto leading-normal font-medium">
@@ -202,9 +202,9 @@
                 >
                   <div class="flex items-center gap-3.5 min-w-0">
                     <div class="w-9 h-9 rounded-full bg-surface-gray-3 border border-outline-gray-1 shadow-2xs flex items-center justify-center shrink-0">
-                      <FeatherIcon
-                        :name="item.share_type === 'UserGroup' || item.user_count > 1 ? 'users' : (item.share_type === 'Role' ? 'shield' : 'user')"
-                        class="w-4.5 h-4.5 text-ink-gray-4"
+                      <span
+                        :class="['lucide-' + (item.share_type === 'UserGroup' || item.user_count > 1 ? 'users' : (item.share_type === 'Role' ? 'shield' : 'user')), 'w-4.5 h-4.5 text-ink-gray-4']"
+                        aria-hidden="true"
                       />
                     </div>
                     <div class="min-w-0">
@@ -293,7 +293,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Button,
   Badge,
-  FeatherIcon,
   Dropdown,
   TabButtons,
   ScrollArea,

@@ -38,7 +38,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: [
-      'frappe-ui > feather-icons',
       'highlight.js',
       'highlight.js/lib/core',
       'interactjs',

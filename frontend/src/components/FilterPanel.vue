@@ -1,12 +1,11 @@
 <template>
-  <Popover placement="bottom-end">
-    <template #target="{ togglePopover, close }">
-      <div class="flex items-center">
+  <Popover side="bottom" align="end" :bare="true">
+    <template #trigger="{ close }">
+      <div class="flex items-center cursor-pointer">
         <Button
           label="Filter"
           :iconLeft="FilterIcon"
           :class="filterCount ? 'rounded-r-none' : ''"
-          @click="togglePopover"
         >
           <template v-if="filterCount" #suffix>
             <div
@@ -20,12 +19,12 @@
           v-if="filterCount"
           tooltip="Clear All Filters"
           class="rounded-l-none border-l border-outline-gray-1"
-          icon="x"
+          icon="lucide-x"
           @click.stop="clearAllFilters(close)"
         />
       </div>
     </template>
-    <template #body="{ close }">
+    <template #default="{ close }">
       <div
         class="my-2 min-w-40 rounded-lg bg-surface-elevation-2 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
       >
@@ -69,7 +68,7 @@
                 </div>
                 <Button
                   variant="ghost"
-                  icon="x"
+                  icon="lucide-x"
                   @click="removeFilter(i)"
                 />
               </div>
@@ -87,7 +86,7 @@
               class="!text-ink-gray-5"
               variant="ghost"
               label="Add Filter"
-              iconLeft="plus"
+              iconLeft="lucide-plus"
               @click="isAddingFilter = true"
             />
             <Button
@@ -101,7 +100,7 @@
           <div v-else class="mt-1 border-t border-outline-gray-2 pt-2">
             <div class="flex items-center justify-between gap-2 mb-2">
               <span class="text-sm font-medium text-ink-gray-7">Select Field</span>
-              <Button variant="ghost" icon="x" class="!h-6 !w-6 !p-1 text-ink-gray-5" @click="isAddingFilter = false; fieldSearch = ''" />
+              <Button variant="ghost" icon="lucide-x" class="!h-6 !w-6 !p-1 text-ink-gray-5" @click="isAddingFilter = false; fieldSearch = ''" />
             </div>
             <FormControl
               v-model="fieldSearch"

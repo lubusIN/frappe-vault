@@ -13,6 +13,7 @@ def share_secret(
     frappe_role: str = None,
     permission_level: str = "View Only",
     expires_on: str = None,
+    cascade_permissions: int = 1,
 ) -> dict:
     """Share a secret or folder with a user or role.
 
@@ -54,6 +55,7 @@ def share_secret(
                     "permission_level": permission_level,
                     "shared_by": frappe.session.user,
                     "expires_on": expires_on,
+                    "cascade_permissions": cascade_permissions,
                 },
             )
             doc = frappe.get_doc("Vault Share", existing_share)
@@ -90,6 +92,7 @@ def share_secret(
             "shared_name": shared_name,
             "expires_on": expires_on,
             "shared_by": frappe.session.user,
+            "cascade_permissions": cascade_permissions,
         }
     )
     doc.insert()
@@ -467,6 +470,9 @@ def get_role_users(
                 elif override_share and override_share.is_revoked:
                     is_revoked = True
                     perm_level = override_share.permission_level or role_share_perm
+                elif any(s.is_revoked for s in user_shares):
+                    is_revoked = True
+                    perm_level = user_shares[0].permission_level if user_shares else role_share_perm
                 elif not role_name:
                     is_revoked = True
                     perm_level = user_shares[0].permission_level if user_shares else role_share_perm

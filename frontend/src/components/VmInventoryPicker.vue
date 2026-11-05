@@ -1,6 +1,6 @@
 <template>
-  <Dialog v-model="show" :options="{ title: 'Add Hosts from Inventory', size: 'lg' }">
-    <template #body-content>
+  <Dialog v-model="show" title="Add Hosts from Inventory" size="lg">
+    <template #default>
       <div class="space-y-4">
         <!-- Step 1: server role -->
         <div v-if="!selectedRole">

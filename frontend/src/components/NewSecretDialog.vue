@@ -1,12 +1,27 @@
 <template>
-  <Dialog v-model="show" :options="{ title: 'Add Secret', size: 'lg' }">
-    <template #body-content>
+  <Dialog v-model="show" title="Add Secret" size="lg">
+    <template #default>
       <div class="space-y-4">
         <FormControl label="Title" v-model="form.title" :required="true" placeholder="e.g. Gmail, AWS Console, Passport Scan" />
 
         <FormControl label="Secret Type" type="select" v-model="form.secret_type" :options="SECRET_TYPES" />
 
-        <FormControl label="Folder" type="select" v-model="form.folder" :options="folderOptions" />
+        <div>
+          <label class="block text-xs font-medium text-ink-gray-7 mb-1.5">Folder</label>
+          <Combobox
+            v-model="form.folder"
+            :options="folderOptions"
+            placeholder="Select a folder..."
+          >
+            <template #item-prefix="{ item }">
+              <div :style="{ paddingLeft: (item.level * 1.5) + 'rem' }" class="flex items-center">
+                <span class="lucide-corner-down-right size-4 mr-2 text-ink-gray-4 shrink-0" v-if="item.level > 0" aria-hidden="true" />
+                <span class="lucide-folder size-4 mr-2 text-ink-gray-5 shrink-0" v-else-if="item.value !== ''" aria-hidden="true" />
+                <div class="size-4 mr-2 shrink-0" v-else></div>
+              </div>
+            </template>
+          </Combobox>
+        </div>
 
         <!-- Guided Linux flow: hosts -> automation access -> test -> password.
              One host row rotates a single VM; many rotate together, and the
@@ -22,7 +37,7 @@
                 <div class="flex items-center gap-2">
                   <Button v-if="inventoryAvailable" variant="ghost" size="sm" label="From inventory" @click="showInventoryPicker = true" />
                   <Button variant="ghost" size="sm" label="Paste list" @click="showBulkHosts = !showBulkHosts" />
-                  <Button variant="subtle" size="sm" icon-left="plus" label="Add host" @click="addHost()" />
+                  <Button variant="subtle" size="sm" icon-left="lucide-plus" label="Add host" @click="addHost()" />
                 </div>
               </div>
 
@@ -45,7 +60,7 @@
                     <FormControl class="flex-1" v-model="host.hostname" placeholder="hostname or IP" />
                     <FormControl class="w-24" v-model="host.ssh_port" placeholder="22" />
                     <Button
-                      variant="ghost" icon="x" class="!p-1 h-auto text-ink-gray-5 hover:text-ink-red-3"
+                      variant="ghost" icon="lucide-x" class="!p-1 h-auto text-ink-gray-5 hover:text-ink-red-3"
                       title="Remove host" @click="form.linux_hosts.splice(hIdx, 1)"
                     />
                   </div>
@@ -73,7 +88,7 @@
                 class="font-mono text-xs"
               />
               <p v-if="keyFingerprint" class="text-xs font-mono text-ink-gray-6 leading-relaxed break-all">
-                <FeatherIcon name="key" class="w-3.5 h-3.5 inline -mt-0.5 mr-1 shrink-0" />
+                <span class="lucide-key w-3.5 h-3.5 inline-block -mt-0.5 mr-1 shrink-0" aria-hidden="true" />
                 {{ keyFingerprint.fingerprint }} ({{ keyFingerprint.comment }})
                 <span class="text-ink-gray-4">&mdash; check this matches what you installed on the server</span>
               </p>
@@ -92,7 +107,7 @@
                 :type="showSecrets ? 'text' : 'password'"
               />
               <p v-if="!form.strict_host_key_checking" class="text-xs text-ink-gray-5 leading-relaxed">
-                <FeatherIcon name="info" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                <span class="lucide-info w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />
                 Optional. Leave off to enrol hosts without pre-seeding known_hosts. Turn it on for hosts
                 reached over an untrusted network &mdash; each one's SSH key must then already be in the
                 Vault server's known_hosts.
@@ -107,10 +122,10 @@
                   :loading="linuxTestResource.loading" @click="handleTestLinux"
                 />
                 <span v-if="testState === 'passed'" class="text-xs font-medium text-ink-green-3">
-                  <FeatherIcon name="check-circle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />All hosts reachable
+                  <span class="lucide-circle-check w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />All hosts reachable
                 </span>
                 <span v-else-if="testState === 'failed'" class="text-xs font-medium text-ink-red-3">
-                  <FeatherIcon name="x-circle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Not reachable
+                  <span class="lucide-circle-x w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />Not reachable
                 </span>
               </div>
               <p v-if="testMessage" class="text-xs leading-relaxed" :class="testState === 'passed' ? 'text-ink-gray-6' : 'text-ink-red-3'">
@@ -118,7 +133,7 @@
               </p>
               <div v-if="hostResults.length" class="space-y-1">
                 <div v-for="h in hostResults" :key="h.hostname" class="flex items-start gap-2 text-xs">
-                  <FeatherIcon :name="h.ok ? 'check' : 'x'" class="w-3.5 h-3.5 mt-0.5 shrink-0" :class="h.ok ? 'text-ink-green-3' : 'text-ink-red-3'" />
+                  <span class="w-3.5 h-3.5 mt-0.5 shrink-0" :class="h.ok ? 'lucide-check text-ink-green-3' : 'lucide-x text-ink-red-3'" aria-hidden="true" />
                   <span class="font-mono text-ink-gray-7 shrink-0">{{ h.hostname }}</span>
                   <span v-if="h.error" class="text-ink-red-3 break-all">{{ h.error }}</span>
                 </div>
@@ -141,7 +156,7 @@
                 </FormControl>
               </div>
               <p v-if="linuxCredentialLocked" class="text-xs text-ink-gray-5 leading-relaxed">
-                <FeatherIcon name="lock" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                <span class="lucide-lock w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />
                 Confirm the hosts above first &mdash; that way the password you store is one Vault has
                 proven it can actually set on every machine.
               </p>
@@ -220,10 +235,10 @@
                     @click="handleTestConnection"
                   />
                   <span v-if="testState === 'passed'" class="text-xs font-medium text-ink-green-3">
-                    <FeatherIcon name="check-circle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Connection confirmed
+                    <span class="lucide-circle-check w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />Connection confirmed
                   </span>
                   <span v-else-if="testState === 'failed'" class="text-xs font-medium text-ink-red-3">
-                    <FeatherIcon name="x-circle" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Not connected
+                    <span class="lucide-circle-x w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />Not connected
                   </span>
                 </div>
 
@@ -262,7 +277,7 @@
                 </FormControl>
               </div>
               <p v-if="credentialLocked" class="text-xs text-ink-gray-5 leading-relaxed">
-                <FeatherIcon name="lock" class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                <span class="lucide-lock w-3.5 h-3.5 inline-block -mt-0.5 mr-1" aria-hidden="true" />
                 Confirm the connection above first — that way the password you store is one Vault has proven
                 it can actually reset.
               </p>
@@ -290,7 +305,7 @@
                       class="w-10 h-10 object-cover rounded-lg shrink-0 border border-outline-gray-1 bg-surface-base"
                     />
                     <div v-else class="w-10 h-10 rounded-lg bg-surface-gray-3 border border-outline-gray-1 flex items-center justify-center shrink-0">
-                      <FeatherIcon name="paperclip" class="w-5 h-5 text-ink-gray-7" />
+                      <span class="lucide-paperclip w-5 h-5 text-ink-gray-7" aria-hidden="true" />
                     </div>
                     <div class="min-w-0">
                       <p class="text-xs font-semibold text-ink-gray-9 truncate">{{ getFileName(fileUrl) }}</p>
@@ -301,7 +316,7 @@
                   <Button
                     variant="ghost"
                     size="xs"
-                    icon="x"
+                    icon="lucide-x"
                     class="!p-1 h-auto text-ink-gray-5 hover:text-ink-red-3 hover:bg-surface-gray-3 focus:outline-none"
                     title="Remove File"
                     @click.stop.prevent="removeAttachment(idx)"
@@ -323,7 +338,7 @@
                   @change="handleFileUpload($event)"
                 />
                 <div class="flex flex-col items-center gap-1">
-                  <FeatherIcon name="paperclip" class="w-6 h-6 text-ink-gray-5" />
+                  <span class="lucide-paperclip w-6 h-6 text-ink-gray-5" aria-hidden="true" />
                   <span class="text-xs font-semibold text-ink-gray-8">
                     {{ uploadingFiles ? 'Uploading files...' : (attachmentList.length > 0 ? '+ Add More Files' : 'Click or drag files here to upload') }}
                   </span>
@@ -418,7 +433,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { Dialog, FormControl, Button, FeatherIcon, toast } from 'frappe-ui'
+import { Dialog, FormControl, Button, toast, Combobox } from 'frappe-ui'
 import { SECRET_TYPES, ROTATION_UNITS, DATABASE_TYPES, DATABASE_DEFAULT_PORTS } from '../composables/constants'
 import { visibleFieldsFor } from '../composables/secretFields'
 import {
@@ -445,12 +460,36 @@ const hashicorpSyncResource = useSyncToHashicorpVault()
 const foldersResource = useFolders()
 
 const folderOptions = computed(() => {
-  const opts = [{ label: 'None', value: '' }]
-  for (const f of foldersResource.data || []) {
-    if (f.can_write) {
-      opts.push({ label: f.folder_name, value: f.name })
+  const opts = [{ label: 'None', value: '', level: 0 }]
+  const folders = foldersResource.data || []
+
+  // Build a tree structure so we can traverse it and get correct visual ordering
+  const tree = []
+  const map = {}
+  folders.forEach(f => {
+    map[f.name] = { ...f, children: [] }
+  })
+
+  folders.forEach(f => {
+    if (f.parent_vault_folder && map[f.parent_vault_folder]) {
+      map[f.parent_vault_folder].children.push(map[f.name])
+    } else {
+      tree.push(map[f.name])
+    }
+  })
+
+  const traverse = (nodes, level = 0) => {
+    for (const node of nodes) {
+      if (node.can_write) {
+        opts.push({ label: node.folder_name, value: node.name, level })
+      }
+      if (node.children?.length) {
+        traverse(node.children, level + 1)
+      }
     }
   }
+
+  traverse(tree)
   return opts
 })
 

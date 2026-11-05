@@ -1,13 +1,13 @@
 <template>
-  <Popover placement="bottom-end">
-    <template #target="{ togglePopover }">
-      <Button label="Columns" @click="togglePopover">
+  <Popover side="bottom" align="end" :bare="true">
+    <template #trigger>
+      <Button label="Columns">
         <template #prefix>
           <ColumnsIcon class="h-4" />
         </template>
       </Button>
     </template>
-    <template #body="{ close }">
+    <template #default="{ close }">
       <div
         class="my-2 min-w-40 rounded-lg bg-surface-elevation-2 p-1.5 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
       >
@@ -39,12 +39,9 @@
                   v-if="!element.fixed"
                   variant="ghost"
                   class="!h-5 w-5 !p-1"
+                  icon="lucide-x"
                   @click="removeColumn(element)"
-                >
-                  <template #icon>
-                    <FeatherIcon name="x" class="h-3.5" />
-                  </template>
-                </Button>
+                />
               </div>
             </div>
           </template>
@@ -59,14 +56,14 @@
               class="w-full !justify-start !text-ink-gray-5"
               variant="ghost"
               label="Add Column"
-              iconLeft="plus"
+              iconLeft="lucide-plus"
               @click="isAddingColumn = true"
             />
           </div>
           <div v-else class="mt-1 border-t border-outline-gray-2 pt-2">
             <div class="flex items-center justify-between gap-2 mb-2">
               <span class="text-sm font-medium text-ink-gray-7 pl-1">Select Field</span>
-              <Button variant="ghost" icon="x" class="!h-6 !w-6 !p-1 text-ink-gray-5" @click="isAddingColumn = false; fieldSearch = ''" />
+              <Button variant="ghost" icon="lucide-x" class="!h-6 !w-6 !p-1 text-ink-gray-5" @click="isAddingColumn = false; fieldSearch = ''" />
             </div>
             <FormControl
               v-model="fieldSearch"
@@ -93,7 +90,7 @@
             class="w-full !justify-start !text-ink-gray-5"
             variant="ghost"
             label="Reset to Default"
-            iconLeft="rotate-ccw"
+            iconLeft="lucide-rotate-ccw"
             @click="resetToDefault(close)"
           />
         </div>
@@ -104,7 +101,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { FormControl, FeatherIcon, Popover, Button } from 'frappe-ui'
+import { FormControl, Popover, Button } from 'frappe-ui'
 import Draggable from 'vuedraggable'
 import ColumnsIcon from './ColumnsIcon.vue'
 

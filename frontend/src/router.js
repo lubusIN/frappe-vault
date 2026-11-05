@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   {
     path: '/',
+    alias: ['/dashboard'],
     name: 'Dashboard',
     component: () => import('./views/DashboardView.vue'),
   },
