@@ -166,9 +166,7 @@ def check_connection() -> dict:
 
     if resp.status_code != 200:
         frappe.throw(
-            _("HashiCorp Vault rejected the token (HTTP {0}): {1}").format(
-                resp.status_code, resp.text[:300]
-            )
+            _("HashiCorp Vault rejected the token (HTTP {0}): {1}").format(resp.status_code, resp.text[:300])
         )
 
     policies = (resp.json().get("data") or {}).get("policies") or []

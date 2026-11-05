@@ -89,7 +89,9 @@ def list_vms_for_role(server_role: str) -> list:
     if not _available():
         return []
 
-    filters = {"server_role": ["in", ["", None]]} if server_role == UNASSIGNED else {"server_role": server_role}
+    filters = (
+        {"server_role": ["in", ["", None]]} if server_role == UNASSIGNED else {"server_role": server_role}
+    )
 
     rows = frappe.get_list(
         VM_DOCTYPE,
