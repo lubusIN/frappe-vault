@@ -1,7 +1,8 @@
 """Encryption utilities for Frappe Vault."""
 
 import frappe
-from frappe.utils.password import get_decrypted_password
+
+from frappe_vault.integrations.transit import TransitError, get_stored_password
 
 
 def decrypt_secret_field(doctype: str, name: str, fieldname: str) -> str:
@@ -18,7 +19,10 @@ def decrypt_secret_field(doctype: str, name: str, fieldname: str) -> str:
     # get_decrypted_password reads __Auth directly without a permission check, so
     # it also serves guests opening a one-time link. An unset field returns None.
     try:
-        return get_decrypted_password(doctype, name, fieldname, raise_exception=False) or ""
+        return get_stored_password(doctype, name, fieldname, raise_exception=False) or ""
+    except TransitError:
+        # HashiCorp unreachable or refusing: say so, never show a blank value.
+        raise
     except Exception:
         frappe.log_error(title=f"Vault Secret Decryption Warning ({name}.{fieldname})")
         return ""

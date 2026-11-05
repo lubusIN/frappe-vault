@@ -998,9 +998,9 @@ def consume_one_time_link(token: str, passphrase: str = None) -> dict:
     if _one_time_link_has_passphrase(link.name):
         import hmac
 
-        from frappe.utils.password import get_decrypted_password
+        from frappe_vault.integrations.transit import get_stored_password
 
-        stored_passphrase = get_decrypted_password(
+        stored_passphrase = get_stored_password(
             "Vault One Time Link", link.name, "passphrase", raise_exception=False
         )
         if not stored_passphrase:

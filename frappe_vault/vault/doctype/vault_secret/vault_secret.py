@@ -7,6 +7,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_to_date, cint, get_datetime, now_datetime, today
 
+from frappe_vault.integrations.transit import TransitPasswordsMixin
+
 # Absolute floor for generated and stored passwords, regardless of Vault Settings.
 MIN_ROTATION_PASSWORD_LENGTH = 12
 
@@ -32,7 +34,7 @@ ROTATABLE_FIELD_BY_TYPE = {
 SYNCED_TYPES = ("Database", "Linux Server")
 
 
-class VaultSecret(Document):
+class VaultSecret(TransitPasswordsMixin, Document):
     """Controller for Vault Secret — the core secrets storage DocType."""
 
     def validate(self):
@@ -213,9 +215,9 @@ class VaultSecret(Document):
         # the in-memory value when one is set, which here is the very value being
         # compared — that would make every password look unchanged and quietly
         # disable history, the reuse policy and strength scoring alike.
-        from frappe.utils.password import get_decrypted_password
+        from frappe_vault.integrations.transit import get_stored_password
 
-        stored = get_decrypted_password(self.doctype, self.name, field, raise_exception=False)
+        stored = get_stored_password(self.doctype, self.name, field, raise_exception=False)
         return stored != value
 
     # ------------------------------------------------------------------
