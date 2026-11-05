@@ -703,6 +703,13 @@ const sidebarConfig = reactive({
               }
             ]
           },
+          ...(isVaultAdmin.value
+            ? [{
+                label: 'Vault Settings',
+                icon: 'lucide-settings',
+                onClick: () => { window.location.href = '/desk/vault-settings' }
+              }]
+            : []),
           {
             label: 'Toggle Theme',
             icon: 'lucide-moon',
