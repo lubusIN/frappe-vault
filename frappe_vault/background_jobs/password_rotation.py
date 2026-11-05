@@ -123,6 +123,20 @@ def rotate_secret(secret_name: str) -> dict:
             )
         )
 
+    # A Database or Linux credential lives on a real system. Rotating it in the
+    # vault without reaching that system would leave the vault holding a value
+    # that does not work there, and drop the one that does. When the secret is
+    # not set up to apply to its target (its schedule — and with it the target
+    # apply — was turned off), refuse rather than desync.
+    if doc.secret_type in SYNCED_TYPES and not _applies_to_target(doc):
+        frappe.throw(
+            _(
+                "{0} secrets can only be rotated together with the server they belong to. "
+                "Turn on automatic rotation for this secret (which applies the new password "
+                "to the server), or change the password on the server and update it here."
+            ).format(doc.secret_type)
+        )
+
     # Delivery is resolved up front but never gates the rotation: a missing
     # passphrase or mail account is a reason to skip the email, not a reason to
     # leave a credential unrotated. When email is off this is None throughout.

@@ -467,15 +467,39 @@ class TestRotationWithoutEmail(FrappeTestCase):
         from frappe_vault.background_jobs.password_rotation import rotate_secret
 
         frappe.db.set_single_value("Vault Settings", "send_rotation_emails", 0)
-        doc = make_db_secret(title="DB Rotation Postgres Secret")
-        before = doc.get_password("db_password", raise_exception=False)
+        # A plain Password secret: it lives only in the vault, so rotating it
+        # in the vault alone is the whole job.
+        doc = frappe.get_doc(
+            {
+                "doctype": "Vault Secret",
+                "title": "DB Rotation Postgres Secret",
+                "secret_type": "Password",
+                "password": "InitialPlainPassword123!",
+            }
+        ).insert(ignore_permissions=True)
+        before = doc.get_password("password", raise_exception=False)
 
         result = rotate_secret(doc.name)
 
-        after = frappe.get_doc("Vault Secret", doc.name).get_password("db_password", raise_exception=False)
+        after = frappe.get_doc("Vault Secret", doc.name).get_password("password", raise_exception=False)
         self.assertNotEqual(before, after)
         self.assertTrue(after)
         self.assertFalse(result["emailed"])
+
+    def test_a_database_secret_not_applying_to_its_server_is_not_rotated(self):
+        # Without a schedule the target apply is off. Rotating anyway would
+        # leave the vault holding a password the database does not accept.
+        from frappe_vault.background_jobs.password_rotation import rotate_secret
+
+        frappe.db.set_single_value("Vault Settings", "send_rotation_emails", 0)
+        doc = make_db_secret(title="DB Rotation Postgres Secret")
+        self.assertFalse(doc.apply_rotation_to_target)
+        before = doc.get_password("db_password", raise_exception=False)
+
+        self.assertRaises(frappe.ValidationError, rotate_secret, doc.name)
+
+        after = frappe.get_doc("Vault Secret", doc.name).get_password("db_password", raise_exception=False)
+        self.assertEqual(before, after)
 
 
 class TestResavingAnUnchangedPassword(FrappeTestCase):
