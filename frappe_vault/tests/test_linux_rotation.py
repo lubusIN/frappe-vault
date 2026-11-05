@@ -22,6 +22,7 @@ from frappe_vault.services.linux_rotation_service import (
     _build_inventory,
     _normalise_hosts,
     _parse_result,
+    _unsafe_vars_yaml,
     build_linux_target,
     hash_password,
     make_linux_target,
@@ -204,9 +205,10 @@ class TestLinuxTarget(FrappeTestCase):
             # The inventory only ever references the key by file path.
             self.assertNotIn(FAKE_KEY, inventory)
             self.assertIn("ansible_ssh_private_key_file", inventory)
-            # A sudo password is a connection secret too, and lives here, not
-            # in the environment handed to the subprocess.
-            self.assertIn("SudoSecret123", inventory)
+            # The sudo password is neither in the inventory (INI values are
+            # templated and parsed for key=value pairs) nor in the environment;
+            # it goes in the !unsafe vars file instead.
+            self.assertNotIn("SudoSecret123", inventory)
             self.assertNotIn("SudoSecret123", json.dumps(_build_env(target, workdir)))
 
             with open(os.path.join(workdir, "id_key")) as fh:
@@ -225,6 +227,62 @@ class TestLinuxTarget(FrappeTestCase):
             self.assertEqual(mode, 0o600)
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+
+    # ------------------------------------------------------------------
+    # Injection into the Ansible run (inventory lines, Jinja templating)
+    # ------------------------------------------------------------------
+
+    def test_account_names_with_template_or_inventory_syntax_are_refused(self):
+        for bad in (
+            "{{ lookup('pipe', 'id') }}",
+            "svc ansible_connection=local",
+            "svc\nhost2",
+            "-rf",
+            "",
+        ):
+            with self.subTest(username=bad):
+                self.assertRaises(LinuxApplyError, make_target, username=bad or " ")
+            with self.subTest(ansible_user=bad):
+                self.assertRaises(LinuxApplyError, make_target, ansible_user=bad or " ")
+
+    def test_hosts_that_could_carry_inventory_syntax_are_refused(self):
+        for bad in (
+            "localhost ansible_connection=local",
+            "vm1\nvm2 ansible_connection=local",
+            "vm1;id",
+            "{{ 7*6 }}",
+            "-oProxyCommand=id",
+        ):
+            with self.subTest(hostname=bad):
+                self.assertRaises(LinuxApplyError, make_target, hosts=[{"hostname": bad, "ssh_port": 22}])
+
+    def test_out_of_range_ports_are_refused(self):
+        for port in (70000, -1):
+            with self.subTest(port=port):
+                self.assertRaises(LinuxApplyError, make_target, hosts=[{"hostname": "vm1", "ssh_port": port}])
+
+    def test_real_hostnames_addresses_and_account_names_are_accepted(self):
+        target = make_target(
+            username="svc_backup$",
+            ansible_user="deploy-bot",
+            hosts=["db1.fumbaports.local", "10.1.2.3", {"hostname": "fe80::1", "ssh_port": 2222}],
+        )
+        self.assertEqual(
+            [h["hostname"] for h in target.hosts], ["db1.fumbaports.local", "10.1.2.3", "fe80::1"]
+        )
+
+    def test_every_string_var_is_marked_unsafe(self):
+        rendered = _unsafe_vars_yaml(
+            {
+                "vault_target_user": "svc",
+                "ansible_become_password": 'p@ss "q" #x {{ 1+1 }}',
+                "vault_use_become": True,
+            }
+        )
+        lines = dict(line.split(": ", 1) for line in rendered.strip().splitlines())
+        self.assertEqual(lines["vault_target_user"], '!unsafe "svc"')
+        self.assertEqual(lines["ansible_become_password"], '!unsafe "p@ss \\"q\\" #x {{ 1+1 }}"')
+        self.assertEqual(lines["vault_use_become"], "true")
 
     def test_host_key_checking_is_on_by_default(self):
         env = _build_env(make_target(), "/tmp")

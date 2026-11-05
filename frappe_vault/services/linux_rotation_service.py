@@ -40,6 +40,7 @@ happened.
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -148,6 +149,7 @@ def make_linux_target(
         frappe.throw(
             _("Username is required — it names the account whose password is changed."), LinuxApplyError
         )
+    _validate_account_name(username, _("Username"))
 
     ansible_user = (ansible_user or "").strip()
     if not ansible_user:
@@ -155,6 +157,7 @@ def make_linux_target(
             _("An Ansible user is required. It is the account Vault connects as to reach each host."),
             LinuxApplyError,
         )
+    _validate_account_name(ansible_user, _("Ansible user"))
 
     if ansible_user == username:
         # Rotating the very account Ansible authenticates as would work once and
@@ -362,10 +365,53 @@ def _normalise_hosts(hosts, default_port: int) -> list:
 
         if not hostname or hostname in seen:
             continue
+        _validate_host(hostname, port)
         seen.add(hostname)
         out.append({"hostname": hostname, "ssh_port": port})
 
     return out
+
+
+# A POSIX login name (the portable set useradd accepts): it is the only thing
+# that may reach a playbook argument or an inventory line as an account name.
+_ACCOUNT_NAME_RE = re.compile(r"^[a-z_][a-z0-9_.-]{0,31}\$?$", re.IGNORECASE)
+# A DNS hostname or IPv4 literal; IPv6 literals are checked with ipaddress.
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",
+    re.IGNORECASE,
+)
+
+
+def _validate_account_name(name: str, label: str):
+    """Reject anything that is not a plain Linux login name.
+
+    These values end up in an Ansible inventory and in playbook arguments. A
+    space or newline would let them add inventory variables (e.g. switch the
+    connection to `local`, running the play on this server), and `{{ }}` would
+    be evaluated by Ansible's templating on this server.
+    """
+    if not _ACCOUNT_NAME_RE.match(name or ""):
+        frappe.throw(
+            _("{0} '{1}' is not a valid Linux account name.").format(label, name),
+            LinuxApplyError,
+        )
+
+
+def _validate_host(hostname: str, port: int):
+    """Allow only a hostname or IP address and a real TCP port — nothing that can carry inventory syntax."""
+    import ipaddress
+
+    try:
+        ipaddress.ip_address(hostname)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+
+    if not (is_ip or _HOSTNAME_RE.match(hostname)):
+        frappe.throw(_("'{0}' is not a valid hostname or IP address.").format(hostname), LinuxApplyError)
+
+    if not 1 <= int(port) <= 65535:
+        frappe.throw(_("SSH port {0} for {1} is out of range.").format(port, hostname), LinuxApplyError)
 
 
 def _run(target: LinuxTarget, playbook: str, extra_vars: dict) -> RunResult:
@@ -390,7 +436,11 @@ def _run(target: LinuxTarget, playbook: str, extra_vars: dict) -> RunResult:
 
         variables = dict(extra_vars)
         variables["vault_use_become"] = bool(target.use_become)
-        vars_path = _write_private(workdir, "vars.json", json.dumps(variables))
+        if target.use_become and target.become_password:
+            # Kept out of the inventory: an INI value is templated and parsed
+            # for further key=value pairs, a vars entry tagged !unsafe is not.
+            variables["ansible_become_password"] = target.become_password
+        vars_path = _write_private(workdir, "vars.yml", _unsafe_vars_yaml(variables))
 
         completed = subprocess.run(  # noqa: S603 — fixed binary, no shell
             [
@@ -456,11 +506,33 @@ def _build_inventory(target: LinuxTarget, workdir: str) -> str:
     if target.use_become:
         lines.append("ansible_become=true")
         lines.append("ansible_become_method=sudo")
-        if target.become_password:
-            lines.append(f"ansible_become_password={target.become_password}")
+        # The sudo password goes in the !unsafe vars file, never here.
 
     _write_key(workdir, target.ssh_private_key)
 
+    return "\n".join(lines) + "\n"
+
+
+def _unsafe_vars_yaml(variables: dict) -> str:
+    """Render extra vars as YAML with every string tagged `!unsafe`.
+
+    Ansible templates variable values lazily, so a value containing `{{ }}` —
+    an account name, a password — would otherwise be evaluated as Jinja on this
+    server (e.g. `lookup('pipe', ...)` runs a command). `!unsafe` makes Ansible
+    treat the string as data. JSON string literals are valid YAML double-quoted
+    scalars, which gives exact escaping for any character.
+    """
+    lines = []
+    for key, value in variables.items():
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+            raise ValueError(f"invalid variable name: {key!r}")
+        if isinstance(value, bool):
+            rendered = "true" if value else "false"
+        elif isinstance(value, int | float):
+            rendered = json.dumps(value)
+        else:
+            rendered = "!unsafe " + json.dumps("" if value is None else str(value))
+        lines.append(f"{key}: {rendered}")
     return "\n".join(lines) + "\n"
 
 
