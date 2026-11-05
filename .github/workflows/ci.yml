@@ -8,7 +8,7 @@ on:
   pull_request:
 
 concurrency:
-  group: main-frappe_vault-${{ github.event.number }}
+  group: main-frappe_vault-${{ github.event.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -16,7 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-    name: Server Tests
+      matrix:
+        include:
+          - frappe-branch: version-15
+            python-version: '3.11'
+            node-version: '22'
+          - frappe-branch: version-16
+            python-version: '3.14'
+            node-version: '24'
+    name: Server Tests (${{ matrix.frappe-branch }})
 
     services:
       redis-cache:
@@ -47,22 +55,21 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node-version }}
           check-latest: true
 
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
@@ -84,7 +91,7 @@ jobs:
       - name: Setup Bench
         run: |
           pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-branch version-15 ~/frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-branch ${{ matrix.frappe-branch }} ~/frappe-bench
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
 

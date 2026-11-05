@@ -157,7 +157,15 @@ def sync_navigation_fixtures():
     fixtures directly, on every install and every migrate, closes both gaps —
     the vault's entry in the Desk app grid and its Desk sidebar are as durable as
     everything else this app ships.
+
+    Both fixtures use the Desk navigation introduced in Frappe v16 (`Workspace
+    Sidebar`, and the reworked `Desktop Icon` with `icon_image`/`link_type`). On
+    v15 neither exists in that form, so there is nothing to sync — the Vault
+    workspace still appears through the regular module sidebar.
     """
+    if not has_desk_navigation_fixtures():
+        return
+
     from frappe.modules.import_file import import_file_by_path
 
     app_path = frappe.get_app_path("frappe_vault")
@@ -170,6 +178,11 @@ def sync_navigation_fixtures():
                 frappe.get_traceback(),
                 f"Frappe Vault Navigation Fixture Import Failed ({relative_path})",
             )
+
+
+def has_desk_navigation_fixtures() -> bool:
+    """Whether this Frappe version has the v16 Desk navigation doctypes our fixtures target."""
+    return bool(frappe.db.exists("DocType", "Workspace Sidebar"))
 
 
 def add_email_template_custom_fields():

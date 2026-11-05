@@ -9,13 +9,29 @@ deleted. `sync_navigation_fixtures()` closes both gaps by importing the fixture
 files directly, and this is what proves it actually does.
 """
 
+import functools
+import unittest
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from frappe_vault.setup.install import sync_navigation_fixtures
+from frappe_vault.setup.install import has_desk_navigation_fixtures, sync_navigation_fixtures
+
+
+def requires_desk_navigation(test):
+    """Skip on Frappe versions without the v16 Desk navigation (Workspace Sidebar / new Desktop Icon)."""
+
+    @functools.wraps(test)
+    def wrapper(self, *args, **kwargs):
+        if not has_desk_navigation_fixtures():
+            raise unittest.SkipTest("Workspace Sidebar / Desktop Icon navigation needs Frappe v16+")
+        return test(self, *args, **kwargs)
+
+    return wrapper
 
 
 class TestNavigationFixtures(FrappeTestCase):
+    @requires_desk_navigation
     def test_desktop_icon_exists_and_is_owned_by_the_app(self):
         sync_navigation_fixtures()
         icon = frappe.get_doc("Desktop Icon", "Vault")
@@ -27,6 +43,7 @@ class TestNavigationFixtures(FrappeTestCase):
         # this app installs to, not only one where someone uploaded it by hand.
         self.assertEqual(icon.icon_image, "/assets/frappe_vault/images/vault-icon.svg")
 
+    @requires_desk_navigation
     def test_sidebar_exists_and_is_owned_by_the_app(self):
         sync_navigation_fixtures()
         sidebar = frappe.get_doc("Workspace Sidebar", "Vault")
@@ -37,6 +54,7 @@ class TestNavigationFixtures(FrappeTestCase):
         labels = [i.label for i in sidebar.items]
         self.assertIn("Vault Secrets", labels)
 
+    @requires_desk_navigation
     def test_missing_icon_record_is_recreated_by_a_resync(self):
         # The scenario this whole module exists to prevent: the record is gone
         # from the database (orphan-cleanup ran before this fix existed, a stray
@@ -59,6 +77,7 @@ class TestNavigationFixtures(FrappeTestCase):
         icon = frappe.get_doc("Desktop Icon", "Vault")
         self.assertEqual(icon.app, "frappe_vault")
 
+    @requires_desk_navigation
     def test_missing_sidebar_record_is_recreated_by_a_resync(self):
         sync_navigation_fixtures()
         frappe.db.delete("Workspace Sidebar Item", {"parent": "Vault"})
