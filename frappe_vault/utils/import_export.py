@@ -61,7 +61,7 @@ def export_secrets(format: str = "json", category: str = None) -> dict:
     return {"content": content, "filename": filename, "mimetype": mimetype}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def import_secrets(data: str, format: str = "json") -> dict:
     """Import secrets from JSON or CSV format.
 

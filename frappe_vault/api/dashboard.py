@@ -58,7 +58,7 @@ def get_chart(
     return {"error": _("Chart not found")}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_dashboard_layout(layout: str | list) -> dict:
     user_roles = frappe.get_roles()
     is_admin = (
@@ -72,11 +72,10 @@ def save_dashboard_layout(layout: str | list) -> dict:
     if isinstance(layout, list):
         layout = json.dumps(layout)
     frappe.db.set_single_value("Vault Settings", "dashboard_layout", layout)
-    frappe.db.commit()  # nosemgrep
     return {"status": "success"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reset_dashboard_layout() -> dict:
     user_roles = frappe.get_roles()
     is_admin = (
@@ -88,5 +87,4 @@ def reset_dashboard_layout() -> dict:
         frappe.throw(_("Only Vault Admins can reset the dashboard layout."), frappe.PermissionError)
 
     frappe.db.set_single_value("Vault Settings", "dashboard_layout", None)
-    frappe.db.commit()  # nosemgrep
     return {"status": "reset"}

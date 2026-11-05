@@ -59,7 +59,7 @@ def get_all() -> list[dict]:
     return folders
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create(
     folder_name: str,
     icon: str | None = None,
@@ -100,7 +100,7 @@ def create(
     return {"name": doc.name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete(
     name: str, delete_secrets: bool = False, subfolder_action: str = "move_up", target_folder: str = None
 ) -> dict:
@@ -206,7 +206,7 @@ def delete(
     return {"deleted": name, "deleted_secrets": bool(should_delete_secrets)}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update(
     name: str,
     folder_name: str | None = None,

@@ -43,14 +43,14 @@ def get(name: str, decrypt: bool = False) -> dict:
     return get_secret(name, decrypt=frappe.utils.cint(decrypt))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create(**kwargs) -> dict:
     from frappe_vault.services.secret_service import create_secret
 
     return create_secret(kwargs)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update(name: str, **kwargs) -> dict:
     if not isinstance(name, str):
         frappe.throw(_("Invalid secret identifier"), frappe.ValidationError)
@@ -59,7 +59,7 @@ def update(name: str, **kwargs) -> dict:
     return update_secret(name, kwargs)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete(name: str) -> dict:
     if not isinstance(name, str):
         frappe.throw(_("Invalid secret identifier"), frappe.ValidationError)
@@ -68,7 +68,7 @@ def delete(name: str) -> dict:
     return delete_secret(name)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def bulk_delete(secret_names: str | builtins.list) -> dict:
     from frappe_vault.services.secret_service import bulk_delete as _delete
 
@@ -79,7 +79,7 @@ def bulk_delete(secret_names: str | builtins.list) -> dict:
     return _delete([s for s in secret_names if isinstance(s, str)])
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def toggle_bookmark(name: str) -> dict:
     if not isinstance(name, str):
         frappe.throw(_("Invalid secret identifier"), frappe.ValidationError)
@@ -88,7 +88,7 @@ def toggle_bookmark(name: str) -> dict:
     return _toggle(name)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def bulk_move(secret_names: str | builtins.list, target_folder: str) -> dict:
     from frappe_vault.services.secret_service import bulk_move as _move
 
@@ -116,7 +116,7 @@ def decrypt(name: str) -> dict:
     return get_secret(name, decrypt=True)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def rotate_now(name: str) -> dict:
     """Rotate a secret's password immediately, off the rotation schedule.
 
@@ -160,7 +160,7 @@ def rotate_now(name: str) -> dict:
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 @rate_limit(limit=30, seconds=60 * 60)
 def test_db_connection_params(
     database_type: str,
@@ -239,7 +239,7 @@ def test_db_connection_params(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def test_db_connection(name: str) -> dict:
     """Check that a Database secret's stored credentials actually reach its server.
 
@@ -310,7 +310,7 @@ def fingerprint_ssh_key(ssh_private_key: str) -> dict:
     return fingerprint_key(ssh_private_key)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 @rate_limit(limit=30, seconds=60 * 60)
 def test_linux_connection_params(
     username: str,
@@ -369,7 +369,7 @@ def test_linux_connection_params(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def test_linux_connection(name: str) -> dict:
     """Reach every host of a Linux Server secret without changing anything.
 
@@ -404,7 +404,7 @@ def test_linux_connection(name: str) -> dict:
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def clear_zip_passphrase(name: str) -> dict:
     """Remove custom passphrase protection from a secret's rotation archive.
 
@@ -436,7 +436,7 @@ def get_totp(name: str) -> dict:
     return get_totp_code(name)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_file() -> dict:
     """Upload a file attachment for a Vault Secret (works for both standard Vault Users and Admins)."""
     if frappe.session.user == "Guest":

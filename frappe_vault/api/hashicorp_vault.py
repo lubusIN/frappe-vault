@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def sync_secret(name: str) -> dict:
     """Push one secret's current values to HashiCorp Vault. Requires write access."""
     if not isinstance(name, str):
@@ -18,7 +18,7 @@ def sync_secret(name: str) -> dict:
     return push_secret(name)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def test_connection() -> dict:
     """Verify the configured HashiCorp Vault URL and token both work."""
     roles = frappe.get_roles()
