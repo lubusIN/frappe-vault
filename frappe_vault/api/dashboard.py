@@ -71,7 +71,7 @@ def save_dashboard_layout(layout: str | list) -> dict:
 
     if isinstance(layout, list):
         layout = json.dumps(layout)
-    frappe.db.set_value("Vault Settings", "Vault Settings", "dashboard_layout", layout)  # nosemgrep
+    frappe.db.set_single_value("Vault Settings", "dashboard_layout", layout)
     frappe.db.commit()  # nosemgrep
     return {"status": "success"}
 
@@ -87,6 +87,6 @@ def reset_dashboard_layout() -> dict:
     if not is_admin:
         frappe.throw(_("Only Vault Admins can reset the dashboard layout."), frappe.PermissionError)
 
-    frappe.db.set_value("Vault Settings", "Vault Settings", "dashboard_layout", None)  # nosemgrep
+    frappe.db.set_single_value("Vault Settings", "dashboard_layout", None)
     frappe.db.commit()  # nosemgrep
     return {"status": "reset"}
