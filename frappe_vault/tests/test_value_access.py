@@ -100,6 +100,10 @@ class TestSecretValueAccess(FrappeTestCase):
         frappe.db.commit()  # nosemgrep — cleanup must outlive the test rollback
 
     def share_with(self, user, permission_level="View Only"):
+        # Shares are granted by the secret's owner: an admin role alone may not
+        # widen access to a secret (see test_zero_trust.py).
+        acting = frappe.session.user
+        frappe.set_user(frappe.db.get_value("Vault Secret", self.secret.name, "owner"))
         share = frappe.get_doc(
             {
                 "doctype": "Vault Share",
@@ -111,6 +115,7 @@ class TestSecretValueAccess(FrappeTestCase):
             }
         )
         share.insert(ignore_permissions=True)
+        frappe.set_user(acting)
         return share
 
     # ------------------------------------------------------------------

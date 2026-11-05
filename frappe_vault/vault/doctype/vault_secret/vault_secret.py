@@ -38,12 +38,28 @@ class VaultSecret(Document):
     def validate(self):
         """Validate the secret before saving."""
         self.validate_title()
+        self.validate_access_changes()
         self.validate_linux_config()
         self.validate_rotation_config()
         self.validate_zip_passphrase()
         self.check_password_reuse()
         self.calculate_password_strength()
         self.validate_totp_secret()
+
+    def validate_access_changes(self):
+        """Moving a secret or changing its owner changes who can read it.
+
+        A folder's owner and the people it is shared with can read the secrets
+        in it, so moving a secret is a form of sharing. Only someone already
+        granted the secret may do it — not merely someone who administers the
+        vault. Checked against the stored record, i.e. before the change.
+        """
+        if self.is_new():
+            return
+        if self.has_value_changed("folder") or self.has_value_changed("owner"):
+            from frappe_vault.utils.permissions import require_access_entitlement
+
+            require_access_entitlement("Vault Secret", self.name, _("move or reassign"))
 
     def validate_title(self):
         """Ensure title is present and trimmed."""

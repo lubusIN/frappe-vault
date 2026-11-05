@@ -28,6 +28,13 @@ def share_secret(
         if not frappe.has_permission("Vault Folder", "share", shared_name):
             frappe.throw(_("You don't have permission to share this folder"), frappe.PermissionError)
 
+    # Management rights are not enough: only someone already granted the item
+    # may grant it on. Checked here too because re-enabling an existing share
+    # below writes with db.set_value, which skips the Vault Share controller.
+    from frappe_vault.utils.permissions import require_access_entitlement
+
+    require_access_entitlement(shared_doctype, shared_name, _("share"))
+
     if share_type == "User" and user:
         owner = frappe.db.get_value(shared_doctype, shared_name, "owner")
         if user == owner:
@@ -537,6 +544,13 @@ def save_role_member_permission(
         )
         if not is_sharer:
             frappe.throw(_("Not permitted to modify role members"), frappe.PermissionError)
+
+    if not is_revoked:
+        # Restoring or granting a member's access widens who can read the item;
+        # the writes below use db.set_value and skip the Vault Share controller.
+        from frappe_vault.utils.permissions import require_access_entitlement
+
+        require_access_entitlement(shared_doctype, shared_name, _("share"))
 
     role_share_perm = (
         frappe.db.get_value(

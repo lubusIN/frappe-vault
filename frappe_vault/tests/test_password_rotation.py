@@ -305,6 +305,10 @@ class TestPasswordRotation(FrappeTestCase):
         return email
 
     def make_share(self, secret_name, user, is_revoked=0, expires_on=None):
+        # Granted by the secret's owner: an admin role alone may not widen
+        # access to a secret (see test_zero_trust.py).
+        acting = frappe.session.user
+        frappe.set_user(frappe.db.get_value("Vault Secret", secret_name, "owner"))
         frappe.get_doc(
             {
                 "doctype": "Vault Share",
@@ -317,6 +321,7 @@ class TestPasswordRotation(FrappeTestCase):
                 "expires_on": expires_on,
             }
         ).insert(ignore_permissions=True)
+        frappe.set_user(acting)
 
     # ------------------------------------------------------------------
     # Encrypted archive

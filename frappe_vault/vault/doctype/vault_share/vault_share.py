@@ -11,6 +11,37 @@ class VaultShare(Document):
     def validate(self):
         self.validate_share_target()
         self.set_shared_by()
+        self.validate_sharer_is_entitled()
+
+    def validate_sharer_is_entitled(self):
+        """Only someone already granted the item may grant it to anyone else.
+
+        Without this, an admin's management rights would let them share any
+        secret with themselves (or an accomplice) and then read it. Narrowing
+        access — revoking, or a revoked per-user override — is always allowed.
+        """
+        if self.is_revoked:
+            return
+
+        grants_access = self.is_new() or any(
+            self.has_value_changed(f)
+            for f in (
+                "shared_doctype",
+                "shared_name",
+                "share_type",
+                "user",
+                "frappe_role",
+                "cascade_permissions",
+                "is_revoked",
+                "expires_on",
+            )
+        )
+        if not grants_access:
+            return
+
+        from frappe_vault.utils.permissions import require_access_entitlement
+
+        require_access_entitlement(self.shared_doctype, self.shared_name, _("share"))
 
     def validate_share_target(self):
         """Ensure exactly one target is set based on share_type."""

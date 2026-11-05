@@ -4,6 +4,7 @@ Ensures row-level security: users only see secrets they own or that are shared w
 """
 
 import frappe
+from frappe import _
 
 PERM_HIERARCHY = {"View Only": 1, "View & Copy": 2, "Edit": 3, "Full Control": 4}
 
@@ -438,6 +439,109 @@ def can_reveal_secret_value(secret_name, user=None) -> bool:
         return False
 
     return user in get_secret_access_grants(secret_name)
+
+
+# ----------------------------------------------------------------------
+# Who may change who can see something (zero-trust admin model)
+#
+# Administering the vault (Vault Admin, System Manager, Administrator) lets a
+# user manage records but never read the values in them. Every way of widening
+# access - sharing, moving a secret into a folder, moving a folder under a new
+# parent, changing an owner - would otherwise let an admin grant themselves (or
+# an accomplice account) the right to read. So each of those requires the
+# caller to already be granted the item, exactly as reading it does.
+# ----------------------------------------------------------------------
+
+
+def get_folder_access_grants(folder_name: str) -> set:
+    """Users granted a folder's contents: its owner, and holders of an active
+    share on the folder or on an ancestor shared with `cascade_permissions`,
+    minus per-user revocations. Admin roles are not included — the folder
+    counterpart of `get_secret_access_grants`.
+    """
+    owner = frappe.db.get_value("Vault Folder", folder_name, "owner")
+    if not owner:
+        return set()
+
+    from frappe.utils.nestedset import get_ancestors_of
+
+    ancestors = get_ancestors_of("Vault Folder", folder_name) or []
+    shares = frappe.db.sql(
+        """
+        SELECT share_type, user, frappe_role, shared_name
+        FROM `tabVault Share`
+        WHERE is_revoked = 0
+          AND (expires_on IS NULL OR expires_on > NOW())
+          AND shared_doctype = 'Vault Folder'
+          AND (shared_name = %s OR (shared_name IN %s AND cascade_permissions = 1))
+    """,
+        (folder_name, tuple(ancestors) or ("",)),
+        as_dict=True,
+    )
+
+    candidates = {s.user for s in shares if s.share_type == "User" and s.user}
+    roles = {s.frappe_role for s in shares if s.share_type == "Role" and s.frappe_role}
+    if roles:
+        candidates.update(
+            frappe.get_all(
+                "Has Role", filters={"role": ["in", list(roles)], "parenttype": "User"}, pluck="parent"
+            )
+        )
+
+    granting = {folder_name} | {s.shared_name for s in shares if s.shared_name in ancestors}
+    revoked = set(
+        frappe.get_all(
+            "Vault Share",
+            filters={
+                "shared_doctype": "Vault Folder",
+                "share_type": "User",
+                "is_revoked": 1,
+                "shared_name": ["in", list(granting)],
+            },
+            pluck="user",
+        )
+    )
+    candidates -= revoked
+    candidates.add(owner)
+    candidates.discard("Guest")
+    candidates.discard(None)
+    return candidates
+
+
+def can_change_access(doctype: str, name: str, user: str | None = None) -> bool:
+    """Whether `user` may widen who can see this secret or folder.
+
+    Only someone already granted the item qualifies; holding an admin role
+    does not.
+    """
+    user = user or frappe.session.user
+    if not user or user == "Guest" or not name:
+        return False
+    if doctype == "Vault Secret":
+        return user in get_secret_access_grants(name)
+    if doctype == "Vault Folder":
+        return user in get_folder_access_grants(name)
+    return False
+
+
+def require_access_entitlement(doctype: str, name: str, action: str):
+    """Raise PermissionError unless the session user may widen access to `name`.
+
+    `action` is a short verb phrase for the message, e.g. "share" or "move".
+    Install, migrate and patch runs act for no particular person and are exempt.
+    """
+    if frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_patch:
+        return
+    if can_change_access(doctype, name):
+        return
+    label = _("secret") if doctype == "Vault Secret" else _("folder")
+    frappe.throw(
+        _(
+            "Only people who have been given access to this {0} can {1} it. "
+            "Administering the vault does not grant access to what is stored in it."
+        ).format(label, action),
+        frappe.PermissionError,
+    )
 
 
 def get_folder_permission_query(user=None):

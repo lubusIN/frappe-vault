@@ -35,6 +35,11 @@ after_install = "frappe_vault.setup.install.after_install"
 after_migrate = "frappe_vault.setup.install.after_migrate"
 before_uninstall = "frappe_vault.setup.install.before_uninstall"
 
+# Vault secrets are only handed out through Vault's own audited reveal path.
+override_whitelisted_methods = {
+    "frappe.client.get_password": "frappe_vault.api.overrides.get_password",
+}
+
 # Document Events
 doc_events = {
     "Vault Secret": {

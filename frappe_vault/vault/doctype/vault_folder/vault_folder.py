@@ -13,6 +13,19 @@ class VaultFolder(NestedSet):
         if self.folder_name:
             self.folder_name = self.folder_name.strip()
 
+        # Moving a folder under a new parent puts its secrets within reach of
+        # that parent's cascading shares; changing its owner hands them over.
+        # Only someone already granted the folder may do either — not merely
+        # someone who administers the vault.
+        if not self.is_new() and (
+            self.has_value_changed("parent_vault_folder") or self.has_value_changed("owner")
+        ):
+            from frappe import _
+
+            from frappe_vault.utils.permissions import require_access_entitlement
+
+            require_access_entitlement("Vault Folder", self.name, _("move or reassign"))
+
         # Keep is_group consistent so NestedSet never throws leaf node errors
         if not self.is_new():
             has_children = frappe.db.count("Vault Folder", {"parent_vault_folder": self.name})

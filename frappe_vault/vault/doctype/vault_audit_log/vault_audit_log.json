@@ -23,7 +23,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Action",
-   "options": "Viewed\nCreated\nUpdated\nDeleted\nShared\nUnshared\nCopied\nGenerated\nExported\nImported\nLogin\nRotated\nSynced to HashiCorp Vault",
+   "options": "Viewed\nCreated\nUpdated\nDeleted\nShared\nUnshared\nCopied\nGenerated\nExported\nImported\nLogin\nRotated\nSynced to HashiCorp Vault\nSettings Changed",
    "read_only": 1,
    "reqd": 1
   },
@@ -98,7 +98,7 @@
  "index_web_pages_for_search": 0,
  "is_submittable": 0,
  "links": [],
- "modified": "2026-05-13 10:00:00.000000",
+ "modified": "2026-11-06 01:20:52.706832",
  "modified_by": "Administrator",
  "module": "Vault",
  "name": "Vault Audit Log",

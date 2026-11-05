@@ -693,9 +693,14 @@ def toggle_bookmark(name: str) -> dict:
 
 def bulk_move(secret_names: list, target_folder: str) -> dict:
     """Move multiple secrets to a target folder."""
+    from frappe_vault.utils.permissions import require_access_entitlement
+
     moved = 0
     for name in secret_names:
         if frappe.has_permission("Vault Secret", "write", name):
+            # Moving a secret into a folder grants that folder's owner and
+            # sharees access; db.set_value skips the controller's own check.
+            require_access_entitlement("Vault Secret", name, _("move"))
             frappe.db.set_value("Vault Secret", name, "folder", target_folder)
             moved += 1
     return {"moved": moved}
