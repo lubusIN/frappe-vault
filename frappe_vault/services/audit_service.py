@@ -7,6 +7,12 @@ from frappe.utils import now_datetime
 def _create_log(action: str, secret: str = None, folder: str = None, details: dict = None):
     """Create an audit log entry. Never throws — failures are logged silently."""
     try:
+        # Outside an HTTP request `frappe.request` is an unbound proxy: it is
+        # falsy, and reading an attribute from it raises RuntimeError (not
+        # AttributeError), so test truthiness first. A bound request can still
+        # lack headers (test harness); never let either drop the audit entry.
+        request = getattr(frappe, "request", None)
+        headers = (request.headers if request else None) or {}
         log = frappe.get_doc(
             {
                 "doctype": "Vault Audit Log",
@@ -15,19 +21,15 @@ def _create_log(action: str, secret: str = None, folder: str = None, details: di
                 "folder": folder,
                 "user": frappe.session.user,
                 "timestamp": now_datetime(),
-                "ip_address": getattr(frappe.local, "request_ip", ""),
-                "user_agent": (
-                    frappe.request.headers.get("User-Agent", "")[:500]
-                    if hasattr(frappe, "request") and frappe.request
-                    else ""
-                ),
+                "ip_address": getattr(frappe.local, "request_ip", "") or "",
+                "user_agent": (headers.get("User-Agent") or "")[:500],
                 "details": frappe.as_json(details) if details else None,
             }
         )
         log.insert(ignore_permissions=True)
-    except Exception as e:
+    except Exception:
         try:
-            frappe.log_error(f"Vault audit log failed: {e}", "Vault Audit Log Error")
+            frappe.log_error(title=f"Vault Audit Log Failed ({action})", message=frappe.get_traceback())
         except Exception:
             pass
 

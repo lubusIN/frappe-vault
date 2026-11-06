@@ -1,0 +1,18 @@
+{
+ "app": "frappe_vault",
+ "bg_color": "gray",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon_image": "/assets/frappe_vault/images/vault-icon.svg",
+ "icon_type": "App",
+ "idx": 0,
+ "label": "Vault",
+ "link": "/vault",
+ "link_type": "External",
+ "name": "Vault",
+ "restrict_removal": 0,
+ "roles": [],
+ "sidebar": "Vault",
+ "standard": 1
+}

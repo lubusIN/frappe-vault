@@ -46,7 +46,9 @@
               :secret-data="secretData || {}"
               :can-edit="canEdit"
               :can-copy="canCopy"
+              :can-reveal="canReveal"
               @open-totp="showTotpDialog = true"
+              @open-rotate="openRotateDialog"
               @saved="handleSecretSaved"
             />
 
@@ -95,8 +97,48 @@
       </template>
     </Dialog>
 
-
-
+    <!-- Rotate Now Dialog -->
+    <Dialog
+      v-model="showRotateDialog"
+      :title="'Rotate ' + (secretData?.title || 'Secret')"
+      size="sm"
+    >
+      <template #default>
+        <div class="space-y-3">
+          <p class="text-sm text-ink-gray-6 leading-normal">
+            Generate a new password now. Everyone with access is notified, and can read the new value
+            here on this page.
+          </p>
+          <p v-if="secretData?.secret_type === 'Linux Server' && secretData?.apply_rotation_to_target" class="text-sm text-ink-gray-6 leading-normal">
+            The password will also be changed on <strong>{{ linuxHostSummary }}</strong>. Anything still
+            connecting with the old password will start failing until it is updated. If any host cannot be
+            reached, nothing is changed anywhere &mdash; Vault and the servers only ever move together.
+          </p>
+          <p v-else-if="secretData?.apply_rotation_to_target" class="text-sm text-ink-gray-6 leading-normal">
+            The password will also be changed on the live
+            <strong>{{ secretData?.database_type || 'database' }}</strong> at
+            <strong>{{ secretData?.db_host }}</strong>. Anything still connecting with the old password
+            &mdash; applications, config files, connection strings &mdash; will start failing until it is
+            updated. If the server refuses the change, nothing here is modified either.
+          </p>
+          <p v-else class="text-sm text-ink-gray-6 leading-normal">
+            The current password is replaced in Vault only &mdash; it is <strong>not</strong> changed on the
+            target system, you must apply it there yourself.
+          </p>
+          <ErrorMessage v-if="rotateError" :message="rotateError" />
+        </div>
+      </template>
+      <template #actions>
+        <div class="flex items-center justify-end gap-2 px-4 pb-4">
+          <Button variant="outline" @click="showRotateDialog = false" class="text-ink-gray-7 hover:bg-surface-gray-2">
+            Cancel
+          </Button>
+          <Button variant="solid" @click="handleRotateNow" :loading="rotateNowResource.loading" class="font-semibold shadow-sm px-4">
+            Rotate
+          </Button>
+        </div>
+      </template>
+    </Dialog>
 
     <!-- TOTP Dialog -->
     <TotpDialog
@@ -118,7 +160,7 @@ import {
   PageHeaderTitle,
   ScrollArea,
 } from 'frappe-ui'
-import { useSecret, useDeleteSecret, useVaultStats } from '../composables/vault'
+import { useSecret, useDeleteSecret, useVaultStats, useRotateNow } from '../composables/vault'
 import { useClipboard } from '../composables/clipboard'
 import SecretActivitySidebar from '../components/SecretActivitySidebar.vue'
 import SecretDetailsPanel from '../components/SecretDetailsPanel.vue'
@@ -190,9 +232,21 @@ function copyToClipboard(text) {
 // --- Resources ---
 const secret = useSecret(props.name)
 const deleteResource = useDeleteSecret()
+const rotateNowResource = useRotateNow()
 const stats = useVaultStats()
 
 const secretData = computed(() => secret.data)
+
+// Names the hosts a Linux Server rotation would apply to, for the Rotate Now
+// confirmation dialog. Database secrets have exactly one host (db_host) built
+// into the copy already; Linux secrets can have many.
+const linuxHostSummary = computed(() => {
+  const hosts = (secretData.value?.linux_hosts || []).map(h => h.hostname).filter(Boolean)
+  if (hosts.length === 0) return 'the server'
+  if (hosts.length === 1) return hosts[0]
+  if (hosts.length === 2) return `${hosts[0]} and ${hosts[1]}`
+  return `${hosts.slice(0, -1).join(', ')}, and ${hosts[hosts.length - 1]}`
+})
 
 // --- Permissions ---
 const currentSessionUser = computed(() => {
@@ -213,7 +267,16 @@ const currentSessionUser = computed(() => {
 
 const userPermission = computed(() => secretData.value?.user_permission || 'View Only')
 
+// Decided by the server, and deliberately not inferable from roles: the admin
+// bypass that grants every other permission here does not grant sight of a
+// secret's values.
+const canReveal = computed(() => !!secretData.value?.can_reveal)
+
 const canEdit = computed(() => {
+  // The edit form is populated from the decrypted values, so it cannot be
+  // opened by someone who may not see them. Administering a secret — moving,
+  // deleting, managing its shares — does not depend on this.
+  if (!canReveal.value) return false
   if (stats.data?.is_admin) return true
   if (currentSessionUser.value === 'Administrator') return true
   const roles = window.frappe?.user_roles || window.frappe?.boot?.user?.roles || []
@@ -232,6 +295,8 @@ const canDelete = computed(() => {
 })
 
 const canCopy = computed(() => {
+  // Copying a stored value means decrypting it first.
+  if (!canReveal.value) return false
   if (stats.data?.is_admin) return true
   if (currentSessionUser.value === 'Administrator') return true
   const roles = window.frappe?.user_roles || window.frappe?.boot?.user?.roles || []
@@ -255,6 +320,27 @@ async function confirmDelete() {
   } catch (err) {
     deleteError.value = err.messages?.[0] || err.message || 'Failed to delete secret'
     toast.error(deleteError.value)
+  }
+}
+
+// --- Rotate Now ---
+const showRotateDialog = ref(false)
+const rotateError = ref('')
+
+function openRotateDialog() {
+  rotateError.value = ''
+  showRotateDialog.value = true
+}
+
+async function handleRotateNow() {
+  rotateError.value = ''
+  try {
+    const result = await rotateNowResource.submit({ name: props.name })
+    showRotateDialog.value = false
+    toast.success(result.message || 'Password rotated')
+    window.dispatchEvent(new CustomEvent('vault-secret-updated', { detail: { name: props.name } }))
+  } catch (err) {
+    rotateError.value = err.messages?.[0] || err.message || 'Failed to rotate password'
   }
 }
 

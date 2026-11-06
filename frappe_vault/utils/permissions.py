@@ -4,6 +4,7 @@ Ensures row-level security: users only see secrets they own or that are shared w
 """
 
 import frappe
+from frappe import _
 
 PERM_HIERARCHY = {"View Only": 1, "View & Copy": 2, "Edit": 3, "Full Control": 4}
 
@@ -258,6 +259,289 @@ def has_secret_permission(doc, ptype="read", user=None):
         return level >= 4
 
     return False
+
+
+def get_secret_access_grants(secret_name, include_admins=False) -> set:
+    """Return the set of users *granted* access to a secret.
+
+    This is the inverse of `get_secret_permission_query` — same access model,
+    resolved forwards from a secret to its people instead of backwards from a
+    user to their secrets. Keep the two in step.
+
+    Included: the secret's owner, its folder's owner, and the holders of any
+    active (non-revoked, unexpired) Vault Share on the secret, on its folder, or
+    on an ancestor folder shared with `cascade_permissions` — for `User` shares
+    directly, and for `Role` shares by expanding the role's members.
+
+    A role member's access can be individually revoked without touching the
+    role share itself, via a per-user override row (`is_role_override=1,
+    is_revoked=1`) scoped to either the secret or its folder — exactly the two
+    `NOT EXISTS` checks in `get_secret_permission_query`. Both are excluded
+    here too. Ownership is never subject to this: an owner or folder owner is
+    always included regardless of any stray/override share row.
+
+    Vault Admins and System Managers are excluded by default. The role bypass
+    lets them administer every secret, but they were not "given access" to any
+    particular one. Pass include_admins=True to add them.
+
+    This is the single definition of "was given access to this secret". Both
+    `get_users_with_secret_access` (who gets mailed a rotation) and
+    `can_reveal_secret_value` (who may decrypt it) derive from it, so the two
+    can never drift apart.
+
+    Args:
+        secret_name: Vault Secret document name
+        include_admins: also return Vault Admin / System Manager users
+
+    Returns:
+        Set of user IDs
+    """
+    secret = frappe.db.get_value("Vault Secret", secret_name, ["owner", "folder"], as_dict=True)
+    if not secret:
+        return set()
+
+    always_included = {u for u in (secret.owner,) if u}
+    if secret.folder:
+        folder_owner = frappe.db.get_value("Vault Folder", secret.folder, "owner")
+        if folder_owner:
+            always_included.add(folder_owner)
+
+    candidates = set(always_included)
+
+    # Ancestor folders reach this secret only through a cascading share — the
+    # same rule as the nested-set join in get_secret_permission_query.
+    ancestor_folders = []
+    if secret.folder:
+        from frappe.utils.nestedset import get_ancestors_of
+
+        ancestor_folders = get_ancestors_of("Vault Folder", secret.folder) or []
+
+    # Active shares on the secret itself, on the folder containing it, or
+    # cascading down from any ancestor folder.
+    shares = frappe.db.sql(
+        """
+        SELECT share_type, user, frappe_role, shared_name
+        FROM `tabVault Share`
+        WHERE is_revoked = 0
+          AND (expires_on IS NULL OR expires_on > NOW())
+          AND (
+              (shared_doctype = 'Vault Secret' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name = %s)
+              OR (shared_doctype = 'Vault Folder' AND shared_name IN %s AND cascade_permissions = 1)
+          )
+    """,
+        (secret_name, secret.folder or "", tuple(ancestor_folders) or ("",)),
+        as_dict=True,
+    )
+
+    roles = {s.frappe_role for s in shares if s.share_type == "Role" and s.frappe_role}
+    candidates.update(s.user for s in shares if s.share_type == "User" and s.user)
+
+    if roles:
+        candidates.update(
+            frappe.get_all(
+                "Has Role",
+                filters={"role": ["in", list(roles)], "parenttype": "User"},
+                pluck="parent",
+            )
+        )
+
+    if include_admins:
+        candidates.update(
+            frappe.get_all(
+                "Has Role",
+                filters={"role": ["in", ["Vault Admin", "System Manager"]], "parenttype": "User"},
+                pluck="parent",
+            )
+        )
+
+    # A revoked User-type share on the secret, its folder, or a cascading
+    # ancestor folder that granted access overrides any role-derived (or stray
+    # direct) grant — same scope as the NOT EXISTS checks in
+    # get_secret_permission_query, which test the override against the folder
+    # the share actually sits on.
+    granting_ancestors = {s.shared_name for s in shares if s.shared_name in ancestor_folders}
+    revoked = set(
+        frappe.get_all(
+            "Vault Share",
+            filters={
+                "share_type": "User",
+                "is_revoked": 1,
+                "shared_name": [
+                    "in",
+                    [n for n in (secret_name, secret.folder, *granting_ancestors) if n],
+                ],
+            },
+            pluck="user",
+        )
+    )
+    candidates -= revoked
+    candidates |= always_included
+    candidates.discard("Guest")
+    candidates.discard(None)
+
+    return candidates
+
+
+def get_users_with_secret_access(secret_name, include_admins=False):
+    """The users who should receive a copy of this secret, e.g. a rotation mail.
+
+    `get_secret_access_grants` narrowed to accounts that can actually receive
+    mail. That filter belongs to delivery only — never reuse this to decide
+    whether somebody may *see* a value, or a user without an email address on
+    their account would be refused their own secret. Use
+    `can_reveal_secret_value` for that.
+
+    Args:
+        secret_name: Vault Secret document name
+        include_admins: also return Vault Admin / System Manager users
+
+    Returns:
+        Sorted list of user IDs
+    """
+    candidates = get_secret_access_grants(secret_name, include_admins=include_admins)
+    if not candidates:
+        return []
+
+    # Only users who can actually receive mail.
+    deliverable = frappe.get_all(
+        "User",
+        filters={"name": ["in", list(candidates)], "enabled": 1},
+        fields=["name", "email"],
+    )
+
+    return sorted(u.name for u in deliverable if u.email)
+
+
+def can_reveal_secret_value(secret_name, user=None) -> bool:
+    """Whether `user` may decrypt this secret's stored values.
+
+    Deliberately does NOT honour the Vault Admin / System Manager / Administrator
+    bypass that governs every other permission here. Those roles administer the
+    vault — list secrets, move them, manage shares, read the audit trail — but
+    administering a secret is not the same as being entitled to read what is
+    inside it. Only the people actually granted the secret qualify: its owner,
+    its folder's owner, and holders of an active share.
+
+    Scope, stated plainly: this is an application-level control, not a
+    cryptographic one. Values are encrypted with the site-wide encryption key,
+    so anyone with shell or database access to this server — which includes
+    whoever holds the Administrator account in practice — can still decrypt them
+    directly, without going through this function. What this stops is casual
+    reading through the app, and it makes every reveal attributable in the audit
+    log. Making it genuinely impossible would require encrypting each secret to
+    keys the server never holds.
+    """
+    if not user:
+        user = frappe.session.user
+
+    if not user or user == "Guest":
+        return False
+
+    return user in get_secret_access_grants(secret_name)
+
+
+# ----------------------------------------------------------------------
+# Who may change who can see something (zero-trust admin model)
+#
+# Administering the vault (Vault Admin, System Manager, Administrator) lets a
+# user manage records but never read the values in them. Every way of widening
+# access - sharing, moving a secret into a folder, moving a folder under a new
+# parent, changing an owner - would otherwise let an admin grant themselves (or
+# an accomplice account) the right to read. So each of those requires the
+# caller to already be granted the item, exactly as reading it does.
+# ----------------------------------------------------------------------
+
+
+def get_folder_access_grants(folder_name: str) -> set:
+    """Users granted a folder's contents: its owner, and holders of an active
+    share on the folder or on an ancestor shared with `cascade_permissions`,
+    minus per-user revocations. Admin roles are not included — the folder
+    counterpart of `get_secret_access_grants`.
+    """
+    owner = frappe.db.get_value("Vault Folder", folder_name, "owner")
+    if not owner:
+        return set()
+
+    from frappe.utils.nestedset import get_ancestors_of
+
+    ancestors = get_ancestors_of("Vault Folder", folder_name) or []
+    shares = frappe.db.sql(
+        """
+        SELECT share_type, user, frappe_role, shared_name
+        FROM `tabVault Share`
+        WHERE is_revoked = 0
+          AND (expires_on IS NULL OR expires_on > NOW())
+          AND shared_doctype = 'Vault Folder'
+          AND (shared_name = %s OR (shared_name IN %s AND cascade_permissions = 1))
+    """,
+        (folder_name, tuple(ancestors) or ("",)),
+        as_dict=True,
+    )
+
+    candidates = {s.user for s in shares if s.share_type == "User" and s.user}
+    roles = {s.frappe_role for s in shares if s.share_type == "Role" and s.frappe_role}
+    if roles:
+        candidates.update(
+            frappe.get_all(
+                "Has Role", filters={"role": ["in", list(roles)], "parenttype": "User"}, pluck="parent"
+            )
+        )
+
+    granting = {folder_name} | {s.shared_name for s in shares if s.shared_name in ancestors}
+    revoked = set(
+        frappe.get_all(
+            "Vault Share",
+            filters={
+                "shared_doctype": "Vault Folder",
+                "share_type": "User",
+                "is_revoked": 1,
+                "shared_name": ["in", list(granting)],
+            },
+            pluck="user",
+        )
+    )
+    candidates -= revoked
+    candidates.add(owner)
+    candidates.discard("Guest")
+    candidates.discard(None)
+    return candidates
+
+
+def can_change_access(doctype: str, name: str, user: str | None = None) -> bool:
+    """Whether `user` may widen who can see this secret or folder.
+
+    Only someone already granted the item qualifies; holding an admin role
+    does not.
+    """
+    user = user or frappe.session.user
+    if not user or user == "Guest" or not name:
+        return False
+    if doctype == "Vault Secret":
+        return user in get_secret_access_grants(name)
+    if doctype == "Vault Folder":
+        return user in get_folder_access_grants(name)
+    return False
+
+
+def require_access_entitlement(doctype: str, name: str, action: str):
+    """Raise PermissionError unless the session user may widen access to `name`.
+
+    `action` is a short verb phrase for the message, e.g. "share" or "move".
+    Install, migrate and patch runs act for no particular person and are exempt.
+    """
+    if frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_patch:
+        return
+    if can_change_access(doctype, name):
+        return
+    label = _("secret") if doctype == "Vault Secret" else _("folder")
+    frappe.throw(
+        _(
+            "Only people who have been given access to this {0} can {1} it. "
+            "Administering the vault does not grant access to what is stored in it."
+        ).format(label, action),
+        frappe.PermissionError,
+    )
 
 
 def get_folder_permission_query(user=None):

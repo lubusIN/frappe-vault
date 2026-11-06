@@ -6,6 +6,8 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import get_datetime, get_url, now_datetime
 
+from frappe_vault.integrations.transit import TransitPasswordsMixin
+
 
 def get_clean_url() -> str:
     """Get site URL stripped of developer port :8000 if proxied."""
@@ -17,7 +19,7 @@ def get_clean_url() -> str:
     return url.rstrip("/")
 
 
-class VaultOneTimeLink(Document):
+class VaultOneTimeLink(TransitPasswordsMixin, Document):
     """One-time shareable links for secrets."""
 
     def before_insert(self):
@@ -58,8 +60,11 @@ class VaultOneTimeLink(Document):
             self.is_consumed = 1
 
         self.last_accessed_at = now_datetime()
-        self.last_accessed_ip = getattr(frappe.local, "request_ip", "")
-        if hasattr(frappe, "request") and frappe.request:
-            self.last_user_agent = frappe.request.headers.get("User-Agent", "")[:500]
+        self.last_accessed_ip = getattr(frappe.local, "request_ip", "") or ""
+        # Unbound outside HTTP (falsy); a bound request can still lack headers.
+        request = getattr(frappe, "request", None)
+        headers = (request.headers if request else None) or {}
+        if headers:
+            self.last_user_agent = (headers.get("User-Agent") or "")[:500]
 
         self.save(ignore_permissions=True)

@@ -1,5 +1,10 @@
 # Patches for Frappe Vault
-# List sequentially executed patch scripts here.
-# Format: <module>.<path>.<patch_function>
+# Listed in the order they run. Format: <module>.<path> — Frappe calls execute().
 
+[pre_model_sync]
+
+[post_model_sync]
+# Needs the `database_type` column to exist, so it must run after the sync.
+frappe_vault.patches.backfill_database_type
+# Needs the nested-set columns (lft/rgt/parent_vault_folder) on Vault Folder.
 frappe_vault.patches.rebuild_folder_tree

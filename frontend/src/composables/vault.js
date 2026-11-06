@@ -56,6 +56,81 @@ export function useDeleteSecret() {
   })
 }
 
+export function useRotateNow() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.rotate_now',
+  })
+}
+
+export function useSyncToHashicorpVault() {
+  return createResource({
+    url: 'frappe_vault.api.hashicorp_vault.sync_secret',
+  })
+}
+
+// Tests a connection from unsaved form values, before any secret exists.
+export function useTestDbConnectionParams() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_db_connection_params',
+  })
+}
+
+// Identifies a pasted SSH private key (type, fingerprint, comment) without
+// storing it, so a wrong-key paste is visible before Test Connection runs.
+export function useFingerprintSshKey() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.fingerprint_ssh_key',
+  })
+}
+
+// Whether the inventory_management app is installed and the current user can
+// read its VM records — the "pick hosts from inventory" option only appears
+// when this is true, rather than showing and then failing.
+export function useVmInventoryAvailable() {
+  return createResource({
+    url: 'frappe_vault.api.inventory.is_available',
+  })
+}
+
+// Server roles in the VM inventory, each with how many VMs carry it.
+export function useVmServerRoles() {
+  return createResource({
+    url: 'frappe_vault.api.inventory.list_server_roles',
+  })
+}
+
+// VMs carrying a given server role, each with its best usable IPv4 address.
+export function useVmsForRole() {
+  return createResource({
+    url: 'frappe_vault.api.inventory.list_vms_for_role',
+  })
+}
+
+// Reaches Linux hosts from unsaved form values, before any secret exists.
+export function useTestLinuxConnectionParams() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_linux_connection_params',
+  })
+}
+
+export function useTestLinuxConnection() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_linux_connection',
+  })
+}
+
+export function useTestDbConnection() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.test_db_connection',
+  })
+}
+
+export function useClearZipPassphrase() {
+  return createResource({
+    url: 'frappe_vault.api.secrets.clear_zip_passphrase',
+  })
+}
+
 export function useBulkDeleteSecrets() {
   return createResource({
     url: 'frappe_vault.api.secrets.bulk_delete',

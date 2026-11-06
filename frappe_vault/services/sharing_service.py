@@ -28,6 +28,13 @@ def share_secret(
         if not frappe.has_permission("Vault Folder", "share", shared_name):
             frappe.throw(_("You don't have permission to share this folder"), frappe.PermissionError)
 
+    # Management rights are not enough: only someone already granted the item
+    # may grant it on. Checked here too because re-enabling an existing share
+    # below writes with db.set_value, which skips the Vault Share controller.
+    from frappe_vault.utils.permissions import require_access_entitlement
+
+    require_access_entitlement(shared_doctype, shared_name, _("share"))
+
     if share_type == "User" and user:
         owner = frappe.db.get_value(shared_doctype, shared_name, "owner")
         if user == owner:
@@ -538,6 +545,13 @@ def save_role_member_permission(
         if not is_sharer:
             frappe.throw(_("Not permitted to modify role members"), frappe.PermissionError)
 
+    if not is_revoked:
+        # Restoring or granting a member's access widens who can read the item;
+        # the writes below use db.set_value and skip the Vault Share controller.
+        from frappe_vault.utils.permissions import require_access_entitlement
+
+        require_access_entitlement(shared_doctype, shared_name, _("share"))
+
     role_share_perm = (
         frappe.db.get_value(
             "Vault Share",
@@ -915,8 +929,16 @@ def create_one_time_link(
     passphrase: str = None,
 ) -> dict:
     """Create a one-time shareable link for a secret."""
-    if not frappe.has_permission("Vault Secret", "read", secret_name):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    from frappe_vault.utils.permissions import can_reveal_secret_value
+
+    # The link hands out plaintext, so creating one requires the right to see
+    # that plaintext. Checking only `read` would let anyone with the admin
+    # bypass mint themselves a link and read a secret they cannot open directly.
+    if not can_reveal_secret_value(secret_name):
+        frappe.throw(
+            _("Only this secret's owner and the people it is shared with can create a link to it."),
+            frappe.PermissionError,
+        )
     if not frappe.has_permission("Vault One Time Link", "create"):
         frappe.throw(_("You don't have permission to create links"), frappe.PermissionError)
 
@@ -940,6 +962,24 @@ def create_one_time_link(
     }
 
 
+def _one_time_link_has_passphrase(link_name: str) -> bool:
+    """Whether a passphrase is stored for this link — checked without decrypting it."""
+    auth = frappe.qb.Table("__Auth")
+    return bool(
+        frappe.qb.from_(auth)
+        .select(auth.name)
+        .where(
+            (auth.doctype == "Vault One Time Link")
+            & (auth.name == link_name)
+            & (auth.fieldname == "passphrase")
+            & (auth.password.isnotnull())
+            & (auth.password != "")
+        )
+        .limit(1)
+        .run()
+    )
+
+
 def consume_one_time_link(token: str, passphrase: str = None) -> dict:
     """Consume a one-time link and return the secret data."""
     link_name = frappe.db.get_value("Vault One Time Link", {"token": token}, "name")
@@ -952,38 +992,30 @@ def consume_one_time_link(token: str, passphrase: str = None) -> dict:
     if not link.is_valid():
         frappe.throw(_("This link has expired or been consumed"))
 
-    # Verify passphrase if configured
-    stored_passphrase = None
-    try:
-        from frappe.utils.password import get_decrypted_password
-
-        stored_passphrase = get_decrypted_password(
-            "Vault One Time Link", link.name, "passphrase", raise_exception=False
-        )
-    except Exception:
-        pass
-
-    if not stored_passphrase:
-        try:
-            auth_val = frappe.db.get_value(
-                "__Auth",
-                {"doctype": "Vault One Time Link", "docname": link.name, "fieldname": "passphrase"},
-                "password",
-            )
-            if auth_val:
-                from frappe.utils.password import decrypt
-
-                stored_passphrase = decrypt(auth_val)
-        except Exception:
-            pass
-
-    if stored_passphrase:
-        if not passphrase:
-            frappe.throw(_("Invalid passphrase"))
+    # Verify passphrase if configured. Fail closed: whether a passphrase is set is
+    # decided from the stored row alone, so a link that has one can never open
+    # just because decrypting it failed (e.g. a rotated site encryption key).
+    if _one_time_link_has_passphrase(link.name):
         import hmac
 
-        # Use constant-time comparison to prevent timing attacks
-        if not hmac.compare_digest(passphrase.encode("utf-8"), stored_passphrase.encode("utf-8")):
+        from frappe_vault.integrations.transit import get_stored_password
+
+        stored_passphrase = get_stored_password(
+            "Vault One Time Link", link.name, "passphrase", raise_exception=False
+        )
+        if not stored_passphrase:
+            frappe.log_error(
+                title="Vault One Time Link Passphrase Error",
+                message=f"Passphrase for one-time link {link.name} could not be decrypted",
+                reference_doctype="Vault One Time Link",
+                reference_name=link.name,
+            )
+            frappe.throw(_("This link cannot be opened. Ask the sender for a new one."))
+
+        # Constant-time comparison to prevent timing attacks
+        if not passphrase or not hmac.compare_digest(
+            passphrase.encode("utf-8"), stored_passphrase.encode("utf-8")
+        ):
             frappe.throw(_("Invalid passphrase"))
 
     # Get secret data

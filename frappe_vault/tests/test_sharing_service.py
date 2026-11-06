@@ -38,6 +38,7 @@ class TestSharingService(FrappeTestCase):
             doc.save(ignore_permissions=True)
 
     def tearDown(self):
+        frappe.set_user("Administrator")
         frappe.db.delete("Vault Secret", {"title": "Test Shared Secret"})
         frappe.db.delete(
             "Vault Secret",
@@ -50,6 +51,7 @@ class TestSharingService(FrappeTestCase):
                         "Test Shared Secret 3",
                         "Test Shared Secret 4",
                         "Test Shared Secret 5",
+                        "Test Sync Secret",
                     ],
                 ]
             },

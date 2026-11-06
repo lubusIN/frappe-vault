@@ -1037,12 +1037,19 @@ const sidebarConfig = reactive({
               }
             ]
           },
-
           {
             icon: 'lucide-settings',
             label: 'Settings',
             onClick: () => { showSettingsModal.value = true }
           },
+          // Vault Settings (password policy, rotation, HashiCorp sync) lives on the Desk form.
+          ...(isVaultAdmin.value
+            ? [{
+                label: 'Vault Settings',
+                icon: 'lucide-sliders-horizontal',
+                onClick: () => { window.location.href = '/desk/vault-settings' }
+              }]
+            : []),
           {
             icon: 'lucide-info',
             label: 'About',

@@ -1,0 +1,75 @@
+{
+ "app": "frappe_vault",
+ "doctype": "Workspace Sidebar",
+ "docstatus": 0,
+ "header_icon": "lock",
+ "items": [
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 1,
+   "label": "Home",
+   "link_to": "Vault",
+   "link_type": "Workspace",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 2,
+   "label": "Vault Secrets",
+   "link_to": "Vault Secret",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 3,
+   "label": "Vault Folders",
+   "link_to": "Vault Folder",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 4,
+   "label": "Vault Audit Log",
+   "link_to": "Vault Audit Log",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 5,
+   "label": "Vault Shares",
+   "link_to": "Vault Share",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 6,
+   "label": "Vault One Time Links",
+   "link_to": "Vault One Time Link",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Workspace Sidebar Item",
+   "idx": 7,
+   "label": "Vault Settings",
+   "link_to": "Vault Settings",
+   "link_type": "DocType",
+   "type": "Link"
+  }
+ ],
+ "module": "Vault",
+ "name": "Vault",
+ "standard": 1,
+ "title": "Vault"
+}

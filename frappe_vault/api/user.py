@@ -35,7 +35,7 @@ def accept_invitation(key: str | None = None):
             frappe.local.response["location"] = "/vault"
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def invite_by_email(emails: str, role: str):
     frappe.only_for(["System Manager", "Vault Admin"], True)
 
@@ -76,7 +76,7 @@ def invite_by_email(emails: str, role: str):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_existing_users(users: str | list, role: str = "Vault User"):
     """
     Add existing users to the Vault by assigning them a role (Vault User or Vault Admin).
@@ -89,7 +89,7 @@ def add_existing_users(users: str | list, role: str = "Vault User"):
         update_user_role(user, role)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_user_role(user: str, new_role: str):
     """
     Update the role of the user to Vault Admin or Vault User.
@@ -112,7 +112,7 @@ def update_user_role(user: str, new_role: str):
     user_doc.save(ignore_permissions=True)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def remove_vault_roles_from_user(user: str):
     """
     Remove a user means removing Vault User & Vault Admin roles from the user.
@@ -145,7 +145,7 @@ def remove_roles(user_doc, *roles):
             user_doc.get("roles").remove(existing_roles[role])
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_profile(
     first_name: str | None = None, last_name: str | None = None, user_image: str | None = None
 ):
@@ -166,7 +166,7 @@ def update_profile(
     return {"first_name": user.first_name, "last_name": user.last_name, "user_image": user.user_image}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def change_password(old_password: str, new_password: str):
     """Wrapper to update user password."""
     from frappe.core.doctype.user.user import update_password

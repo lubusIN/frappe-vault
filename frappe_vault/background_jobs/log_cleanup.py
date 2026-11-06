@@ -5,9 +5,20 @@ from frappe import _
 from frappe.utils import add_days, today
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def cleanup_old_logs() -> dict:
-    """Delete audit logs older than configured retention period in Vault Settings."""
+    """Delete audit logs older than configured retention period in Vault Settings.
+
+    Runs weekly from the scheduler (as Administrator) and from the "Purge Expired
+    Logs Now" button on Vault Settings. Deleting audit history must stay an admin
+    action: without this check any logged-in user could call the endpoint.
+    """
+    # Explicit check rather than frappe.only_for, which v15 skips under tests.
+    if frappe.session.user != "Administrator" and not {"System Manager", "Vault Admin"} & set(
+        frappe.get_roles()
+    ):
+        frappe.throw(_("Only Vault Admins can purge audit logs."), frappe.PermissionError)
+
     retention_days = frappe.db.get_single_value("Vault Settings", "log_retention_days") or 365
     threshold = add_days(today(), -int(retention_days))
 

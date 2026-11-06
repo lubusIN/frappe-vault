@@ -6,10 +6,42 @@ export const SECRET_TYPES = [
   'Media',
   'Credit Card',
   'Database',
+  'Linux Server',
   'Other',
 ]
 
 export const secretTypeOptions = SECRET_TYPES.map(t => ({ label: t, value: t }))
+
+// Interval units for automatic password rotation. Must match the
+// `rotation_unit` Select options on the Vault Secret DocType.
+export const ROTATION_UNITS = [
+  { label: 'Days', value: 'Days' },
+  { label: 'Hours', value: 'Hours' },
+]
+
+// Database engines a 'Database' secret can name. Must match the Vault Secret
+// `database_type` Select options and utils/constants.py DATABASE_TYPES.
+export const DATABASE_TYPES = [
+  { label: 'Select an engine…', value: '' },
+  { label: 'PostgreSQL', value: 'PostgreSQL' },
+  { label: 'MySQL / MariaDB', value: 'MySQL / MariaDB' },
+  { label: 'MongoDB', value: 'MongoDB' },
+]
+
+// Default listening port per engine, used to hint the Port field.
+export const DATABASE_DEFAULT_PORTS = {
+  'PostgreSQL': '5432',
+  'MySQL / MariaDB': '3306',
+  'MongoDB': '27017',
+}
+
+// Secret types whose password the rotation job knows how to regenerate.
+export const ROTATABLE_SECRET_TYPES = ['Password', 'Database', 'Linux Server']
+
+// Types whose rotation always reaches the real system it belongs to, so the
+// vault and the server can never disagree. Not optional — see SYNCED_TYPES in
+// the Vault Secret controller.
+export const SYNCED_SECRET_TYPES = ['Database', 'Linux Server']
 
 export const typeIcons = {
   Password: 'key',
@@ -19,6 +51,7 @@ export const typeIcons = {
   Media: 'paperclip',
   'Credit Card': 'credit-card',
   Database: 'database',
+  'Linux Server': 'server',
   Other: 'file',
 }
 
@@ -30,6 +63,7 @@ export const typeColors = {
   Media: 'bg-teal-100 text-teal-600 dark:bg-teal-950 dark:text-teal-400',
   'Credit Card': 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400',
   Database: 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400',
+  'Linux Server': 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400',
   Other: 'bg-surface-gray-3 text-ink-gray-6 dark:bg-surface-gray-4 dark:text-ink-gray-4',
 }
 
@@ -41,6 +75,7 @@ export const typeMeta = {
   Media: { icon: 'paperclip', bg: 'bg-teal-50 text-teal-600 border-teal-100 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-900', color: 'text-teal-600 dark:text-teal-400' },
   'Credit Card': { icon: 'credit-card', bg: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-900', color: 'text-blue-600 dark:text-blue-400' },
   Database: { icon: 'database', bg: 'bg-cyan-50 text-cyan-600 border-cyan-100 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-900', color: 'text-cyan-600 dark:text-cyan-400' },
+  'Linux Server': { icon: 'server', bg: 'bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-950 dark:text-indigo-400 dark:border-indigo-900', color: 'text-indigo-600 dark:text-indigo-400' },
   Other: { icon: 'lock', bg: 'bg-pink-50 text-pink-600 border-pink-100 dark:bg-pink-950 dark:text-pink-400 dark:border-pink-900', color: 'text-pink-600 dark:text-pink-400' },
 }
 
@@ -108,24 +143,32 @@ export function formatDateTime(dt) {
   return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function formatDurationBucket(seconds) {
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''}`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''}`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days} day${days > 1 ? 's' : ''}`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 4) return `${weeks} week${weeks > 1 ? 's' : ''}`
+  const months = Math.floor(days / 30)
+  if (months < 12) return `${months} month${months > 1 ? 's' : ''}`
+  const years = Math.floor(days / 365)
+  return `${years} year${years > 1 ? 's' : ''}`
+}
+
 export function formatRelativeTime(dt) {
   if (!dt) return ''
   const now = new Date()
   const date = new Date(dt)
-  const seconds = Math.floor((now - date) / 1000)
-  if (seconds < 60) return 'Just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''} ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`
-  const weeks = Math.floor(days / 7)
-  if (weeks < 4) return `${weeks} week${weeks > 1 ? 's' : ''} ago`
-  const months = Math.floor(days / 30)
-  if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`
-  const years = Math.floor(days / 365)
-  return `${years} year${years > 1 ? 's' : ''} ago`
+  const diffSeconds = Math.floor((now - date) / 1000)
+  const future = diffSeconds < 0
+  const seconds = Math.abs(diffSeconds)
+
+  if (seconds < 60) return future ? 'in less than a minute' : 'Just now'
+  const duration = formatDurationBucket(seconds)
+  return future ? `in ${duration}` : `${duration} ago`
 }
 
 export function getFolderIcon(folderName, foldersData) {

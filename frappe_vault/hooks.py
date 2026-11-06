@@ -35,11 +35,19 @@ after_install = "frappe_vault.setup.install.after_install"
 after_migrate = "frappe_vault.setup.install.after_migrate"
 before_uninstall = "frappe_vault.setup.install.before_uninstall"
 
+# Vault secrets are only handed out through Vault's own audited reveal path.
+override_whitelisted_methods = {
+    "frappe.client.get_password": "frappe_vault.api.overrides.get_password",
+}
+
 # Document Events
 doc_events = {
     "Vault Secret": {
         "after_insert": "frappe_vault.services.audit_service.log_secret_created",
-        "on_update": "frappe_vault.services.audit_service.log_secret_updated",
+        "on_update": [
+            "frappe_vault.services.audit_service.log_secret_updated",
+            "frappe_vault.integrations.hashicorp_vault.on_secret_update",
+        ],
         "on_trash": "frappe_vault.services.audit_service.log_secret_deleted",
     },
     "Vault Share": {
@@ -63,6 +71,11 @@ scheduler_events = {
     ],
     "hourly": [
         "frappe_vault.background_jobs.link_cleanup.cleanup_expired_links",
+    ],
+    # Hourly granularity is required for the "Hours" rotation unit to mean
+    # anything; _long keeps archive building and mail queueing off the short queue.
+    "hourly_long": [
+        "frappe_vault.background_jobs.password_rotation.run_password_rotation",
     ],
 }
 

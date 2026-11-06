@@ -5,7 +5,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def share(
     shared_name: str,
     shared_doctype: str = "Vault Secret",
@@ -46,7 +46,7 @@ def get_shares(secret_name: str, shared_doctype: str = "Vault Secret") -> dict:
     return get_shares_for_secret(secret_name, shared_doctype=shared_doctype)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def dismiss_shared_logs(share_names: str | list) -> dict:
     import json
 
@@ -68,7 +68,7 @@ def shared_with_me(limit: int = 20, offset: int = 0) -> dict:
     return get_shared_with_me(limit=int(limit), offset=int(offset))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_one_time_link(
     secret_name: str, expiry_hours: int = 24, max_views: int = 1, passphrase: str | None = None
 ) -> dict:
@@ -81,7 +81,7 @@ def create_one_time_link(
 
 # Guest access required for one-time links, protected by token/passphrase/rate-limit
 # nosemgrep: guest-whitelisted-method (safe, token verified & rate limited)
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(key="consume_link", limit=5, seconds=60)
 def consume_link(token: str, passphrase: str | None = None) -> dict:
     from frappe_vault.services.sharing_service import consume_one_time_link
@@ -138,7 +138,7 @@ def get_share_options() -> dict:
     return {"users": user_options, "roles": role_options}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def bulk_delete_shares(share_names: str | list) -> dict:
     from frappe_vault.services.sharing_service import bulk_delete_shares as _bulk_delete
 
@@ -147,7 +147,7 @@ def bulk_delete_shares(share_names: str | list) -> dict:
     return _bulk_delete(share_names)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_share_permission(share_name: str, permission_level: str) -> dict:
     from frappe_vault.services.sharing_service import update_share_permission as _update_perm
 
@@ -173,7 +173,7 @@ def get_role_users(
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_role_member_permission(
     shared_name: str,
     shared_doctype: str = "Vault Secret",
