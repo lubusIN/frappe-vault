@@ -62,6 +62,10 @@ For in-depth guides and references, explore our dedicated documentation:
 |---|---|
 | **[User Guide](docs/user-guide.md)** | Step-by-step instructions for managing secrets, organizing folders, internal sharing, one-time public links, security dashboard, and browser extension setup. |
 | **[Technical Reference](docs/technical-reference.md)** | System administration, role configuration (`Vault User` vs `Vault Admin`), site encryption key management, background maintenance jobs, REST API reference, DocType data models, and frontend development. |
+| **[Security Architecture](docs/security-architecture.md)** | How secret values are kept from administrators, HashiCorp Transit envelope encryption and why it was chosen, and known limitations. |
+| **[HashiCorp Setup](docs/hashicorp-setup.md)** | AppRole, KV sync, Transit engine and key, turning Transit on for a site, and the HashiCorp audit device. |
+| **[Rotation Setup](docs/rotation-setup.md)** | Preparing Linux servers (Ansible) and PostgreSQL / MySQL databases for automatic password rotation. |
+| **[Operations](docs/operations.md)** | Runbooks, incident containment, backup and recovery with Transit, and a hardening checklist. |
 
 ## Security
 
