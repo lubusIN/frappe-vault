@@ -159,43 +159,50 @@ def create_desktop_icon():
 
 def add_email_template_custom_fields():
     """Add vault_enabled and vault_is_default custom fields to Email Template."""
-    meta = frappe.get_meta("Email Template")
+    try:
+        meta = frappe.get_meta("Email Template")
 
-    fields = [
-        {
-            "default": "0",
-            "fieldname": "vault_enabled",
-            "fieldtype": "Check",
-            "label": "Enabled for Vault",
-            "insert_after": "",
-        },
-        {
-            "default": "0",
-            "fieldname": "vault_is_default",
-            "fieldtype": "Check",
-            "label": "Default Vault Template",
-            "insert_after": "vault_enabled",
-        },
-    ]
+        fields = [
+            {
+                "default": "0",
+                "fieldname": "vault_enabled",
+                "fieldtype": "Check",
+                "label": "Enabled for Vault",
+                "insert_after": "",
+            },
+            {
+                "default": "0",
+                "fieldname": "vault_is_default",
+                "fieldtype": "Check",
+                "label": "Default Vault Template",
+                "insert_after": "vault_enabled",
+            },
+        ]
 
-    fields = [field for field in fields if not meta.has_field(field["fieldname"])]
-    if not fields:
-        return
+        fields = [field for field in fields if not meta.has_field(field["fieldname"])]
+        if not fields:
+            return
 
-    create_custom_fields({"Email Template": fields})
-    frappe.clear_cache(doctype="Email Template")
+        create_custom_fields({"Email Template": fields}, ignore_validate=True)
+        frappe.clear_cache(doctype="Email Template")
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "Frappe Vault Email Template Custom Fields Failed",
+        )
 
 
 def create_default_email_template():
     """Create the default Vault invitation email template if it doesn't already exist."""
-    if not frappe.db.exists("Email Template", "Vault Invitation Default"):
-        doc = frappe.new_doc("Email Template")
-        doc.name = "Vault Invitation Default"
-        doc.subject = "You have been invited to join {{ title }}"
-        doc.use_html = 1
-        doc.vault_enabled = 1
-        doc.vault_is_default = 1
-        doc.response_html = """<p>Hello,</p>
+    try:
+        if not frappe.db.exists("Email Template", "Vault Invitation Default"):
+            doc = frappe.new_doc("Email Template")
+            doc.name = "Vault Invitation Default"
+            doc.subject = "You have been invited to join {{ title }}"
+            doc.use_html = 1
+            doc.vault_enabled = 1
+            doc.vault_is_default = 1
+            doc.response_html = """<p>Hello,</p>
 
 <p>You have been invited to join <strong>{{ title }}</strong>.</p>
 
@@ -210,7 +217,12 @@ def create_default_email_template():
 <p>If you have any questions, feel free to contact your administrator.</p>
 
 <p>Thanks,<br>{{ title }} Team</p>"""
-        doc.insert(ignore_permissions=True)
+            doc.insert(ignore_permissions=True)
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "Frappe Vault Default Email Template Creation Failed",
+        )
 
 
 def before_uninstall():
