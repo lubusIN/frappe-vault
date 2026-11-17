@@ -1,8 +1,8 @@
-<p align="center"><img width="160" src=".github/assets/logo.svg"></p>
+<p align="center"><img height="50" src=".github/assets/logo.svg"></p>
 
 <img src=".github/assets/banner.png" />
 
-[![Playground Demo Link](https://img.shields.io/badge/Live%20Demo-3858e9?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMTkuNzUgMjE2Ij4KICA8ZGVmcz4KICAgIDxjbGlwUGF0aCBpZD0iYSI+CiAgICAgIDxwYXRoIGQ9Ik0wIC4xMjFoMjE5VjIxMkgwWm0wIDAiLz4KICAgIDwvY2xpcFBhdGg+CiAgPC9kZWZzPgogIDxnIGNsaXAtcGF0aD0idXJsKCNhKSI+CiAgICA8cGF0aCBmaWxsPSIjZmZmIiBkPSJNMTQ4LjQwMiAyMTEuNTI3Yy0xMi43OC03NC4xMjUtMzQuMTQ0LTExMy42MTctODYuMjU3LTE0MS43OGwyMi40NjQtNC41OTljMTIuMjM5IDguMDM2IDIyLjg4IDE3LjA2NyAzMi4wOTggMjcuNDk3IDE1LjM1NiAxNy4zNyAyNi4xNCAzNy45MDYgMzQuMTg4IDYyLjU0M2w0NC45MTQtMTM0LjU3NUw1NS43MjMgNDkuMjYycS4wMDYuMDA2LjAyLjAxMWwtMjYuODAyIDUuNDhjLTguOTA2LTMuNDA1LTE4LjQ3Ni02LjY4Ny0yOC43Ny05Ljg5TDIxOC45NTQuMTIxWm0wIDAiLz4KICA8L2c+Cjwvc3ZnPg==&logoSize=auto)](https://frappe-playground.lubus.in/?name=Frappe%20Vault&onboarding=0&apps=frappe_vault&path=/vault)
+[![Playground Preview](https://img.shields.io/badge/Live%20Preview-3858e9?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMy4yMiIgaGVpZ2h0PSIxMy4yMiIgdmlld0JveD0iMCAwIDEzLjIyIDEzLjIyIiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTguOTQsMTMuMjJjLS4xNiwwLS4zMy0uMDItLjQ5LS4wNi0uMzItLjA4LS42Mi0uMjUtLjg2LS40OS0uMDgtLjA4LS4xNS0uMTgtLjE5LS4yOS0xLjI3LTMuNjktMi42My01LjA1LTYuNi02LjU4LS4xLS4wNC0uMTktLjEtLjI3LS4xOC0uMjMtLjI0LS40LS41NC0uNDktLjg2LS4wOC0uMzItLjA4LS42NywwLS45OS4wOS0uMzIuMjYtLjYyLjUtLjg2LjI0LS4yNC41My0uNDEuODYtLjQ5TDEwLjgzLjA2czAsMCwwLDBjLjMyLS4wOC42Ni0uMDcuOTguMDEuMzIuMDkuNjEuMjYuODQuNDkuMjQuMjQuNDEuNTMuNDkuODUuMDkuMzIuMDkuNjYuMDEuOThsLTIuMzUsOS4zOWMtLjA5LjM0LS4yNi42My0uNS44Ny0uMjQuMjQtLjU0LjQxLS44Ni41LS4xNi4wNS0uMzMuMDctLjUuMDdaTTguNzUsMTEuNjdzLjA1LjAyLjA4LjAzYy4wNy4wMi4xNS4wMi4yMiwwLC4wNy0uMDIuMTQtLjA2LjE5LS4xMXMuMDktLjEyLjExLS4xOWwyLjM1LTkuMzhjLjAyLS4wNy4wMi0uMTQsMC0uMjEtLjAyLS4wNy0uMDYtLjE0LS4xMS0uMTlzLS4xMi0uMDktLjE5LS4xMWMtLjA3LS4wMi0uMTQtLjAyLS4yMSwwTDEuOCwzLjg3Yy0uMDYuMDItLjEzLjA1LS4xOC4xMS0uMDUuMDUtLjA5LjEyLS4xMS4xOS0uMDIuMDctLjAyLjE1LDAsLjIyLDAsLjAzLjAyLjA2LjA0LjA5LDQuMTYsMS42NCw1LjgyLDMuMyw3LjIxLDcuMloiLz48L3N2Zz4K&logoSize=auto)](https://frappe-playground.lubus.in/?name=Frappe%20Vault&onboarding=0&apps=frappe_vault&path=/vault)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/frappe-vault/ljnpblaghkeddioeknlgcoolmomofjlj)
 
 # Frappe Vault
@@ -72,15 +72,15 @@ For in-depth guides and references, explore our dedicated documentation:
 
 ### Reporting Vulnerabilities
 
-Please do not report security vulnerabilities through public GitHub issues. If you identify a security issue, contact us privately at [https://lubus.in/contact-us](https://lubus.in/contact-us).
+Please do not report security vulnerabilities publicly. If you identify a security issue, contact us privately at [https://lubus.in/contact-us](https://lubus.in/contact-us).
 
 ## Support
 
 Frappe Vault is a free and open-source project maintained by [LUBUS](https://lubus.in/).
 
-For bugs, feature requests, and community support, please open an issue in the [GitHub Issue Tracker](https://github.com/lubusIN/frappe-vault/issues). Our team reviews community issues based on bandwidth and roadmap priorities.
+For bugs, feature requests, and community support, please open an issue in the [GitHub Issue Tracker](https://github.com/lubusIN/frappe-vault/issues). Our team reviews and addresses issues based on availability and project priorities, so we cannot guarantee response or resolution timelines for community support.
 
-If your organization requires dedicated support, custom integrations, or SLA-backed assistance, please contact [LUBUS](https://lubus.in/contact-us).
+If your organization needs dedicated assistance, implementation help, customization, or priority support, get in touch with [LUBUS](https://lubus.in/contact-us).
 
 ## Contributing
 
@@ -101,7 +101,7 @@ Explore more open-source tools we're building for the Frappe ecosystem:
         <img src="https://raw.githubusercontent.com/lubusIN/frappe-local/main/.github/assets/logo.svg" alt="Frappe Local" height="60">
       </a>
       <br>
-      Create and manage local Frappe benches and sites visually.
+      Manage Frappe benches and sites visually.
     </td>
     <td width="50%" valign="top">
       <a href="https://github.com/lubusIN/frappe-playground">
@@ -118,14 +118,14 @@ Explore more open-source tools we're building for the Frappe ecosystem:
         <img src="https://raw.githubusercontent.com/lubusIN/frappe-brewery/main/.github/assets/logo.svg" alt="Frappe Brewery" height="60">
       </a>
       <br>
-      Discover community-built apps for Frappe.
+      An open app registry for the Frappe Apps.
     </td>
     <td width="50%" valign="top">
       <a href="https://github.com/lubusIN/wp-frappe-data-store">
         <img src="https://raw.githubusercontent.com/lubusIN/wp-frappe-data-store/main/.github/assets/logo.svg" alt="WP Frappe Data Store" height="60">
       </a>
       <br>
-      Connect WordPress and Frappe with a React data store.
+      React Data store for WordPress.
     </td>
   </tr>
 </table>
