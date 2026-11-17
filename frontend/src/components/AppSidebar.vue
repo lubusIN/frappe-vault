@@ -882,7 +882,7 @@ const showAboutModal = ref(false)
 const showSettingsModal = ref(false)
 
 const vaultVersion = computed(() => {
-  return window.frappe?.boot?.versions?.frappe_vault || '1.2.0'
+  return window.frappe?.boot?.versions?.frappe_vault || '1.2.1'
 })
 
 const aboutLinks = [

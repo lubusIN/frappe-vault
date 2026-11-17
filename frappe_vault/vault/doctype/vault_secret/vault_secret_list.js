@@ -152,13 +152,6 @@ frappe.listview_settings["Vault Secret"] = {
                 });
             });
         });
-
-        // Quick password generator access
-        listview.page.add_inner_button(__("Generate Password"), () => {
-            frappe_vault.show_password_generator((password) => {
-                frappe_vault.copy_to_clipboard(password, __("Password"));
-            });
-        });
     },
 
     // Primary action button
