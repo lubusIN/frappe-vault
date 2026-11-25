@@ -27,7 +27,27 @@ class VaultInvitation(Document):
     def before_insert(self):
         frappe.utils.validate_email_address(self.email, True)
 
-        self.key = frappe.generate_hash(length=12)
+        if not frappe.flags.in_install and not frappe.flags.in_migrate:
+            user = frappe.session.user
+            if not user or user == "Guest":
+                frappe.throw(_("Authentication required"), frappe.PermissionError)
+
+            roles = frappe.get_roles(user)
+            is_sys_manager = "System Manager" in roles
+            is_vault_admin = "Vault Admin" in roles
+
+            if not is_sys_manager and not is_vault_admin:
+                frappe.throw(_("You are not allowed to invite users"), frappe.PermissionError)
+
+            if self.role == "System Manager" and not is_sys_manager:
+                frappe.throw(_("You are not allowed to invite System Managers"), frappe.PermissionError)
+
+            if not is_sys_manager and frappe.db.exists("User", self.email):
+                target_roles = frappe.get_roles(self.email)
+                if "System Manager" in target_roles:
+                    frappe.throw(_("Cannot invite an existing System Manager"), frappe.PermissionError)
+
+        self.key = frappe.generate_hash(length=32)
         self.invited_by = frappe.session.user
         self.status = "Pending"
 
@@ -102,7 +122,7 @@ class VaultInvitation(Document):
                 )
             raise
 
-    @frappe.whitelist(methods=["POST"], allow_guest=True)  # nosemgrep
+    @frappe.whitelist(methods=["POST"])  # nosemgrep
     def accept_invitation(self):
         if self.accept():
             # the invitee was not around to set a password, mail them a link to do it

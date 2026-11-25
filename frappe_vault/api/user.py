@@ -14,6 +14,22 @@ def accept_invitation(key: str | None = None):
     if not result:
         frappe.throw(_("Invalid or expired key"))
     invitation = frappe.get_doc("Vault Invitation", result[0])
+
+    if invitation.status != "Pending":
+        frappe.throw(_("Invalid or expired key"))
+
+    # Security: If user already exists, never automatically log in via login_as!
+    # They must authenticate with their own credentials first.
+    user_exists = frappe.db.exists("User", invitation.email)
+    if user_exists:
+        if frappe.session.user != invitation.email:
+            frappe.local.response["type"] = "redirect"
+            frappe.local.response["location"] = "/login?redirect-to=/vault"
+            frappe.msgprint(
+                _("Please log in to your account ({0}) to accept this invitation.").format(invitation.email)
+            )
+            return
+
     is_new_user = invitation.accept()
     invitation.reload()
 
@@ -31,7 +47,6 @@ def accept_invitation(key: str | None = None):
                 reset_url = reset_url.replace(":8000", "")
             frappe.local.response["location"] = reset_url
         else:
-            frappe.local.login_manager.login_as(invitation.email)
             frappe.local.response["location"] = "/vault"
 
 
@@ -99,7 +114,21 @@ def update_user_role(user: str, new_role: str):
     if new_role not in ["Vault Admin", "Vault User"]:
         frappe.throw(_("Cannot assign this role"))
 
+    actor = frappe.session.user
+    actor_roles = frappe.get_roles(actor)
+    is_sys_manager = "System Manager" in actor_roles
+
     user_doc = frappe.get_doc("User", user)
+    target_roles = [d.role for d in user_doc.roles]
+
+    if "System Manager" in target_roles and not is_sys_manager:
+        frappe.throw(_("Cannot modify roles for a System Manager"), frappe.PermissionError)
+
+    if new_role == "Vault Admin" and user_doc.user_type != "System User" and not is_sys_manager:
+        frappe.throw(
+            _("Only System Managers can grant Desk access roles to non-system users"),
+            frappe.PermissionError,
+        )
 
     if new_role == "Vault Admin":
         user_doc.append_roles("Vault Admin")
