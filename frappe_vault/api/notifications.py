@@ -1,6 +1,7 @@
 """Vault Notification API — Whitelisted endpoints for notification management."""
 
 import frappe
+from frappe import _
 
 
 @frappe.whitelist()
@@ -88,9 +89,12 @@ def mark_as_read(docname: str | None = None, mark_all: bool = False) -> dict:
         return {"status": "success", "marked_count": len(unread_docs)}
 
     if docname and isinstance(docname, str):
-        if frappe.db.exists("Notification Log", docname):
+        for_user = frappe.db.get_value("Notification Log", docname, "for_user")
+        if for_user == user or "System Manager" in frappe.get_roles():
             frappe.db.set_value("Notification Log", docname, "read", 1)
             return {"status": "success", "name": docname}
+        else:
+            frappe.throw(_("Not permitted"), frappe.PermissionError)
 
     return {"status": "ignored"}
 

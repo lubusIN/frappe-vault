@@ -8,6 +8,9 @@ from frappe.utils import add_days, today
 @frappe.whitelist()
 def cleanup_old_logs() -> dict:
     """Delete audit logs older than configured retention period in Vault Settings."""
+    if frappe.session.user and frappe.session.user != "Administrator":
+        frappe.only_for(["System Manager", "Vault Admin"], True)
+
     retention_days = frappe.db.get_single_value("Vault Settings", "log_retention_days") or 365
     threshold = add_days(today(), -int(retention_days))
 

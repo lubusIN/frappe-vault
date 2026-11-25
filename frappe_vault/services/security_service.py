@@ -13,9 +13,14 @@ def calculate_security_score(user: str | None = None) -> dict:
         session_user == "Administrator" or "Vault Admin" in user_roles or "System Manager" in user_roles
     )
 
+    if not is_admin or not user:
+        user = session_user
+
     base_filters = {"secret_type": "Password"}
     if not is_admin:
-        base_filters["owner"] = user or session_user
+        base_filters["owner"] = session_user
+    elif user:
+        base_filters["owner"] = user
 
     total = frappe.db.count("Vault Secret", filters=base_filters)
     if not total:
