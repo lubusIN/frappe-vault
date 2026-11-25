@@ -95,7 +95,7 @@ def share_secret(
             "cascade_permissions": cascade_permissions,
         }
     )
-    doc.insert()
+    doc.insert(ignore_permissions=True)
 
     # Send notifications
     from frappe_vault.services.notification_service import notify_vault_admins, send_vault_notification
@@ -152,8 +152,12 @@ def unshare(share_name: str) -> dict:
     doc = frappe.get_doc("Vault Share", share_name)
 
     # Only the sharer, owner, Admin, or Full Control user can unshare
-    is_admin = frappe.session.user == "Administrator" or "Vault Admin" in frappe.get_roles()
-    if not is_admin and doc.shared_by != frappe.session.user:
+    is_admin = (
+        frappe.session.user == "Administrator"
+        or "Vault Admin" in frappe.get_roles()
+        or "System Manager" in frappe.get_roles()
+    )
+    if not is_admin:
         if frappe.db.exists(doc.shared_doctype, doc.shared_name):
             owner = frappe.db.get_value(doc.shared_doctype, doc.shared_name, "owner")
             if owner != frappe.session.user:
@@ -293,9 +297,13 @@ def update_share_permission(share_name: str, permission_level: str) -> dict:
 
     # Only the sharer, owner, or Vault Admin can update permission
     user_roles = frappe.get_roles()
-    is_admin = frappe.session.user == "Administrator" or "Vault Admin" in user_roles
+    is_admin = (
+        frappe.session.user == "Administrator"
+        or "Vault Admin" in user_roles
+        or "System Manager" in user_roles
+    )
 
-    if not is_admin and doc.shared_by != frappe.session.user:
+    if not is_admin:
         owner = frappe.db.get_value(doc.shared_doctype, doc.shared_name, "owner")
         if owner != frappe.session.user:
             from frappe_vault.utils.permissions import get_effective_user_permission
@@ -377,10 +385,13 @@ def get_role_users(
     """Get list of users (from role or direct user shares) along with per-user share status."""
     user = frappe.session.user
     roles = frappe.get_roles(user)
-    is_admin = user == "Administrator" or "Vault Admin" in roles
+    is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
 
-    if not is_admin and not frappe.has_permission("Vault Share", "read"):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    if not is_admin:
+        if not frappe.has_permission("Vault Share", "read"):
+            frappe.throw(_("Not permitted"), frappe.PermissionError)
+        if shared_name and not frappe.has_permission(shared_doctype, "read", shared_name):
+            frappe.throw(_("Not permitted"), frappe.PermissionError)
 
     user_ids = []
     role_share_perm = "View Only"
@@ -530,13 +541,16 @@ def save_role_member_permission(
             has_share_perm = True
 
     if not has_share_perm:
-        # Check if they are the original sharer of this specific role share
-        is_sharer = frappe.db.exists(
-            "Vault Share",
-            {"shared_name": shared_name, "shared_doctype": shared_doctype, "shared_by": frappe.session.user},
-        )
-        if not is_sharer:
-            frappe.throw(_("Not permitted to modify role members"), frappe.PermissionError)
+        frappe.throw(_("Not permitted to modify role members"), frappe.PermissionError)
+
+    user_roles = frappe.get_roles()
+    is_admin = (
+        frappe.session.user == "Administrator"
+        or "Vault Admin" in user_roles
+        or "System Manager" in user_roles
+    )
+    if user == frappe.session.user and not is_admin:
+        frappe.throw(_("You cannot modify your own permission level"), frappe.PermissionError)
 
     role_share_perm = (
         frappe.db.get_value(
@@ -687,6 +701,13 @@ def save_role_member_permission(
 
 def get_shares_for_secret(secret_name: str, shared_doctype: str = "Vault Secret") -> list:
     """Get consolidated primary shares for a secret or folder (both active and revoked), excluding role member overrides."""
+    user = frappe.session.user
+    roles = frappe.get_roles(user)
+    is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+
+    if not is_admin and not frappe.has_permission(shared_doctype, "read", secret_name):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     shares = frappe.get_all(
         "Vault Share",
         filters={
@@ -900,10 +921,10 @@ def dismiss_shared_logs(share_names: list) -> dict:
 
     count = 0
     for name in share_names:
-        # We only hide it for the recipient. If they aren't the recipient, they can't hide it.
-        # But for simplicity, we just set the flag since they can only submit logs they see.
-        frappe.db.set_value("Vault Share", name, "hidden_from_recipient", 1, update_modified=False)
-        count += 1
+        share_user = frappe.db.get_value("Vault Share", name, "user")
+        if share_user == frappe.session.user:
+            frappe.db.set_value("Vault Share", name, "hidden_from_recipient", 1, update_modified=False)
+            count += 1
 
     return {"status": "success", "message": f"{count} logs dismissed"}
 
@@ -929,7 +950,7 @@ def create_one_time_link(
             "passphrase": passphrase,
         }
     )
-    doc.insert()
+    doc.insert(ignore_permissions=True)
 
     return {
         "name": doc.name,

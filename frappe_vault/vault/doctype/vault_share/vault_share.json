@@ -41,7 +41,7 @@
  "permissions": [
   {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1},
   {"create": 1, "delete": 1, "read": 1, "role": "Vault Admin", "write": 1},
-  {"create": 1, "delete": 1, "if_owner": 1, "read": 1, "role": "Vault User", "write": 1}
+  {"read": 1, "role": "Vault User"}
  ],
  "sort_field": "modified",
  "sort_order": "DESC",

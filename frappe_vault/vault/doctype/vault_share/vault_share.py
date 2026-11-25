@@ -11,6 +11,7 @@ class VaultShare(Document):
     def validate(self):
         self.validate_share_target()
         self.set_shared_by()
+        self.validate_permissions()
 
     def validate_share_target(self):
         """Ensure exactly one target is set based on share_type."""
@@ -23,6 +24,45 @@ class VaultShare(Document):
         """Auto-set the sharing user."""
         if not self.shared_by:
             self.shared_by = frappe.session.user
+
+    def validate_permissions(self):
+        """Ensure caller has permission to share or modify sharing for this document."""
+        user = frappe.session.user
+        if not user or user == "Guest":
+            frappe.throw(_("Authentication required"), frappe.PermissionError)
+
+        if frappe.flags.in_install or frappe.flags.in_migrate:
+            return
+
+        roles = frappe.get_roles(user)
+        is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+        if is_admin:
+            return
+
+        # Users cannot grant shares to themselves to escalate privileges
+        if self.share_type == "User" and self.user == user and self.is_new():
+            frappe.throw(_("You cannot share items with yourself"), frappe.PermissionError)
+
+        if not self.shared_doctype or not self.shared_name:
+            return
+
+        from frappe_vault.utils.permissions import get_effective_user_permission
+
+        # Check document ownership or Full Control
+        owner = frappe.db.get_value(self.shared_doctype, self.shared_name, "owner")
+        eff_perm = get_effective_user_permission(self.shared_doctype, self.shared_name, user)
+
+        if owner != user and eff_perm != 4:
+            frappe.throw(
+                _("You do not have permission to manage shares for this item"),
+                frappe.PermissionError,
+            )
+
+        # On update: ensure non-admin / non-owner recipient cannot modify or unrevoke their own share
+        if not self.is_new():
+            old_doc = self.get_doc_before_save()
+            if old_doc and self.share_type == "User" and self.user == user:
+                frappe.throw(_("You cannot modify your own share record"), frappe.PermissionError)
 
     def on_trash(self):
         """Clean up orphaned role overrides if a parent role share is deleted directly."""

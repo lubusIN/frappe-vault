@@ -3,6 +3,7 @@
 import secrets
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import get_datetime, get_url, now_datetime
 
@@ -19,6 +20,47 @@ def get_clean_url() -> str:
 
 class VaultOneTimeLink(Document):
     """One-time shareable links for secrets."""
+
+    def validate(self):
+        self.validate_permissions()
+        self.validate_limits()
+
+    def validate_permissions(self):
+        user = frappe.session.user
+        if not user or user == "Guest":
+            frappe.throw(_("Authentication required"), frappe.PermissionError)
+
+        if frappe.flags.in_install or frappe.flags.in_migrate:
+            return
+
+        roles = frappe.get_roles(user)
+        is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+        if is_admin:
+            return
+
+        if not self.secret:
+            frappe.throw(_("Secret is required"), frappe.ValidationError)
+
+        if not frappe.has_permission("Vault Secret", "read", self.secret):
+            frappe.throw(
+                _("You don't have permission to create a share link for this secret"),
+                frappe.PermissionError,
+            )
+
+    def validate_limits(self):
+        if self.max_views and self.max_views > 100:
+            self.max_views = 100
+        elif not self.max_views or self.max_views < 1:
+            self.max_views = 1
+
+        from frappe.utils import add_days
+
+        max_expiry = add_days(now_datetime(), 30)
+        if self.expires_at:
+            if get_datetime(self.expires_at) > get_datetime(max_expiry):
+                self.expires_at = max_expiry
+        else:
+            self.expires_at = add_days(now_datetime(), 7)
 
     def before_insert(self):
         """Generate unique token, shareable URL, and set creator."""
