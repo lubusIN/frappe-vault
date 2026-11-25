@@ -240,8 +240,8 @@
               </span>
               <div class="flex items-center gap-0.5 shrink-0">
                 <Button v-if="field.name === 'totp_secret' && secretData.has_totp" variant="subtle" theme="blue" icon="lucide-clock" class="!p-1.5 h-auto text-ink-blue-5 hover:text-ink-blue-6 focus:outline-none" title="Get TOTP Code" @click="$emit('open-totp')" />
-                <Button variant="ghost" :icon="revealedFields[field.name] ? 'lucide-eye-off' : 'lucide-eye'" class="!p-1 h-auto text-ink-gray-4 hover:text-ink-gray-9 focus:outline-none" :title="'Reveal ' + field.label" @click="toggleField(field.name)" />
-                <Button v-if="canCopy" variant="ghost" :icon="copiedField === field.name ? 'lucide-check' : 'lucide-copy'" :class="copiedField === field.name ? 'text-ink-green-3 hover:text-ink-green-4' : 'text-ink-gray-4 hover:text-ink-gray-9'" class="!p-1 h-auto focus:outline-none" :title="'Copy ' + field.label" @click="copyFieldData(field.name)" />
+                <Button v-if="field.name !== 'totp_secret' || canEdit" variant="ghost" :icon="revealedFields[field.name] ? 'lucide-eye-off' : 'lucide-eye'" class="!p-1 h-auto text-ink-gray-4 hover:text-ink-gray-9 focus:outline-none" :title="'Reveal ' + field.label" @click="toggleField(field.name)" />
+                <Button v-if="canCopy && (field.name !== 'totp_secret' || canEdit)" variant="ghost" :icon="copiedField === field.name ? 'lucide-check' : 'lucide-copy'" :class="copiedField === field.name ? 'text-ink-green-3 hover:text-ink-green-4' : 'text-ink-gray-4 hover:text-ink-gray-9'" class="!p-1 h-auto focus:outline-none" :title="'Copy ' + field.label" @click="copyFieldData(field.name)" />
               </div>
             </div>
 
@@ -410,12 +410,12 @@ watch(() => props.name, (n) => {
 
 function hasFieldValue(fieldName) {
   if (!props.secretData) return false
-  if (decryptedData.value && decryptedData.value[fieldName] !== undefined) {
-    return Boolean(decryptedData.value[fieldName])
-  }
   const hasKey = 'has_' + fieldName.replace('totp_secret', 'totp')
   if (props.secretData[hasKey] !== undefined) {
     return Boolean(props.secretData[hasKey])
+  }
+  if (decryptedData.value && decryptedData.value[fieldName] !== undefined) {
+    return Boolean(decryptedData.value[fieldName])
   }
   return Boolean(props.secretData[fieldName])
 }
