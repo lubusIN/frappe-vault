@@ -280,7 +280,20 @@ def get_secret(name: str, decrypt: bool = False) -> dict:
     if decrypt:
         from frappe_vault.utils.encryption import get_decrypted_secret_data
 
-        result["decrypted"] = get_decrypted_secret_data(name)
+        decrypted_data = get_decrypted_secret_data(name)
+        # Protect TOTP setup secret: only Edit / Full Control / owners / admins can view the raw TOTP seed.
+        # Viewers (View Only / View & Copy) use get_totp_code() to generate the live 6-digit code instead.
+        can_view_totp = (
+            user == "Administrator"
+            or "Vault Admin" in roles
+            or "System Manager" in roles
+            or doc.owner == user
+            or user_permission in ("Edit", "Full Control")
+        )
+        if not can_view_totp and "totp_secret" in decrypted_data:
+            decrypted_data["totp_secret"] = None
+
+        result["decrypted"] = decrypted_data
 
     # Log access and update metadata
     log_secret_viewed(name)
@@ -294,8 +307,9 @@ def get_totp_code(name: str) -> dict:
     if not frappe.has_permission("Vault Secret", "read", name):
         frappe.throw(_("You don't have permission to access this secret"), frappe.PermissionError)
 
-    secret = get_secret(name, decrypt=True)
-    decrypted = secret.get("decrypted", {})
+    from frappe_vault.utils.encryption import get_decrypted_secret_data
+
+    decrypted = get_decrypted_secret_data(name)
     totp_secret = decrypted.get("totp_secret")
 
     if not totp_secret:
@@ -310,9 +324,19 @@ def get_totp_code(name: str) -> dict:
         code = totp.now()
         remaining_seconds = 30 - (int(time.time()) % 30)
 
-        # Generate QR Code SVG only for owners/admins to prevent offline copying by shared users
+        # Generate QR Code SVG only for owners/admins/full control to prevent offline copying by shared users
         qr_svg = None
-        if secret.get("user_permission") == "Full Control":
+        from frappe_vault.utils.permissions import get_effective_user_permission
+
+        owner = frappe.db.get_value("Vault Secret", name, "owner")
+        user = frappe.session.user
+        roles = frappe.get_roles(user)
+        is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+        has_full_control = (
+            is_admin or owner == user or get_effective_user_permission("Vault Secret", name, user) == 4
+        )
+
+        if has_full_control:
             try:
                 import base64
 
@@ -358,7 +382,10 @@ def upload_secret_attachment(
     if frappe.session.user == "Guest":
         frappe.throw(_("Authentication required"), frappe.PermissionError)
 
-    if doctype == "Vault Secret" and docname:
+    if doctype and doctype != "Vault Secret":
+        frappe.throw(_("Attachments can only be uploaded for Vault Secrets"), frappe.PermissionError)
+
+    if docname:
         from frappe_vault.utils.permissions import has_secret_permission
 
         if not has_secret_permission(docname, ptype="write"):
@@ -370,9 +397,9 @@ def upload_secret_attachment(
         {
             "doctype": "File",
             "file_name": filename,
-            "attached_to_doctype": doctype,
-            "attached_to_name": docname,
-            "is_private": frappe.utils.cint(is_private),
+            "attached_to_doctype": "Vault Secret" if docname else None,
+            "attached_to_name": docname if docname else None,
+            "is_private": 1,
             "content": content,
         }
     )
@@ -407,13 +434,37 @@ def _link_attachments(doc):
     if not urls:
         return
 
+    user = frappe.session.user
+    roles = frappe.get_roles(user)
+    is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+
     for url in urls:
-        file_name = frappe.db.get_value("File", {"file_url": url}, "name")
-        if file_name:
-            # Attach the file to the secret so permissions are inherited
-            frappe.db.set_value(
-                "File", file_name, {"attached_to_doctype": "Vault Secret", "attached_to_name": doc.name}
+        file_doc = frappe.db.get_value(
+            "File",
+            {"file_url": url},
+            ["name", "owner", "attached_to_doctype", "attached_to_name"],
+            as_dict=True,
+        )
+        if not file_doc:
+            continue
+
+        is_owner = file_doc.owner == user or is_admin
+        is_unattached_or_same = not file_doc.attached_to_doctype or (
+            file_doc.attached_to_doctype == "Vault Secret" and file_doc.attached_to_name == doc.name
+        )
+
+        if not is_owner or not is_unattached_or_same:
+            frappe.throw(
+                _("You are not permitted to link this file to a secret"),
+                frappe.PermissionError,
             )
+
+        frappe.db.set_value(
+            "File",
+            file_doc.name,
+            {"attached_to_doctype": "Vault Secret", "attached_to_name": doc.name},
+            update_modified=False,
+        )
 
 
 def create_secret(data: dict) -> dict:
@@ -479,7 +530,21 @@ def update_secret(name: str, data: dict) -> dict:
 
     new_folder = data.get("folder")
     if new_folder and new_folder != doc.folder:
-        from frappe_vault.utils.permissions import has_folder_permission
+        from frappe_vault.utils.permissions import get_effective_user_permission, has_folder_permission
+
+        # Only the secret owner or Full Control users can move secrets between folders
+        user = frappe.session.user
+        roles = frappe.get_roles(user)
+        is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+        if (
+            not is_admin
+            and doc.owner != user
+            and get_effective_user_permission("Vault Secret", name, user) < 4
+        ):
+            frappe.throw(
+                _("Only the secret owner or Full Control users can move secrets to another folder"),
+                frappe.PermissionError,
+            )
 
         if not has_folder_permission(new_folder, ptype="write"):
             frappe.throw(
@@ -617,9 +682,22 @@ def toggle_bookmark(name: str) -> dict:
 
 def bulk_move(secret_names: list, target_folder: str) -> dict:
     """Move multiple secrets to a target folder."""
+    from frappe_vault.utils.permissions import get_effective_user_permission, has_folder_permission
+
+    if target_folder and not has_folder_permission(target_folder, ptype="write"):
+        frappe.throw(_("You don't have permission to move secrets to this folder"), frappe.PermissionError)
+
+    user = frappe.session.user
+    roles = frappe.get_roles(user)
+    is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+
     moved = 0
     for name in secret_names:
-        if frappe.has_permission("Vault Secret", "write", name):
+        if not frappe.db.exists("Vault Secret", name):
+            continue
+        owner = frappe.db.get_value("Vault Secret", name, "owner")
+        can_move = is_admin or owner == user or get_effective_user_permission("Vault Secret", name, user) == 4
+        if can_move:
             frappe.db.set_value("Vault Secret", name, "folder", target_folder)
             moved += 1
     return {"moved": moved}
@@ -627,9 +705,15 @@ def bulk_move(secret_names: list, target_folder: str) -> dict:
 
 def get_vault_stats(user: str | None = None) -> dict:
     """Get dashboard statistics for a specific user or current user."""
-    user = user or frappe.session.user
-    user_roles = frappe.get_roles(user)
-    is_admin = user == "Administrator" or "Vault Admin" in user_roles or "System Manager" in user_roles
+    session_user = frappe.session.user
+    user_roles = frappe.get_roles(session_user)
+    is_admin = (
+        session_user == "Administrator" or "Vault Admin" in user_roles or "System Manager" in user_roles
+    )
+
+    # Prevent metadata IDOR: non-admins cannot query stats for other users
+    if not is_admin or not user:
+        user = session_user
 
     if is_admin:
         permitted_secrets = frappe.get_all(

@@ -49,12 +49,12 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
             except Exception:
                 pass
 
-            # If the user owns the folder or any ancestor folder, they get full control
+            # If the user owns the folder or any ancestor folder, they get Edit access to secrets inside, not Full Control
             folder_owners = frappe.db.get_all(
                 "Vault Folder", filters={"name": ("in", doc_folders)}, pluck="owner"
             )
             if user in folder_owners:
-                return 4
+                return 3
 
     elif shared_doctype == "Vault Folder":
         direct_folder = shared_name

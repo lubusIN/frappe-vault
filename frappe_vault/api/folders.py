@@ -231,7 +231,27 @@ def update(
     old_parent = doc.parent_vault_folder
     if icon is not None:
         doc.icon = icon
-    if parent_vault_folder is not None:
+    if parent_vault_folder is not None and parent_vault_folder != doc.parent_vault_folder:
+        from frappe_vault.utils.permissions import get_effective_user_permission
+
+        # Reparenting a folder requires Full Control / ownership on this folder
+        user = frappe.session.user
+        roles = frappe.get_roles(user)
+        is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
+        eff_perm = get_effective_user_permission("Vault Folder", name, user)
+
+        if not is_admin and doc.owner != user and eff_perm < 4:
+            frappe.throw(
+                _("Only the folder owner or Full Control users can move/reparent this folder"),
+                frappe.PermissionError,
+            )
+
+        if parent_vault_folder and not has_folder_permission(parent_vault_folder, ptype="write"):
+            frappe.throw(
+                _("You don't have permission to move to the destination folder"),
+                frappe.PermissionError,
+            )
+
         doc.parent_vault_folder = parent_vault_folder if parent_vault_folder else None
     if is_group is not None:
         doc.is_group = is_group
