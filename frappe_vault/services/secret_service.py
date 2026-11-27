@@ -448,12 +448,14 @@ def _link_attachments(doc):
         if not file_doc:
             continue
 
-        is_owner = file_doc.owner == user or is_admin
-        is_unattached_or_same = not file_doc.attached_to_doctype or (
+        is_already_linked = (
             file_doc.attached_to_doctype == "Vault Secret" and file_doc.attached_to_name == doc.name
         )
+        if is_already_linked:
+            continue
 
-        if not is_owner or not is_unattached_or_same:
+        is_owner = file_doc.owner == user or is_admin
+        if not is_owner or file_doc.attached_to_doctype:
             frappe.throw(
                 _("You are not permitted to link this file to a secret"),
                 frappe.PermissionError,
@@ -528,11 +530,12 @@ def update_secret(name: str, data: dict) -> dict:
 
     doc = frappe.get_doc("Vault Secret", name)
 
-    new_folder = data.get("folder")
-    if new_folder and new_folder != doc.folder:
+    new_folder = data.get("folder") or None
+    current_folder = doc.folder or None
+    if "folder" in data and new_folder != current_folder:
         from frappe_vault.utils.permissions import get_effective_user_permission, has_folder_permission
 
-        # Only the secret owner or Full Control users can move secrets between folders
+        # Only the secret owner or Full Control users can move secrets between folders (including to root)
         user = frappe.session.user
         roles = frappe.get_roles(user)
         is_admin = user == "Administrator" or "Vault Admin" in roles or "System Manager" in roles
@@ -546,7 +549,7 @@ def update_secret(name: str, data: dict) -> dict:
                 frappe.PermissionError,
             )
 
-        if not has_folder_permission(new_folder, ptype="write"):
+        if new_folder and not has_folder_permission(new_folder, ptype="write"):
             frappe.throw(
                 _("You don't have permission to move secrets to this folder"), frappe.PermissionError
             )

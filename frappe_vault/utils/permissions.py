@@ -32,6 +32,7 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
     ancestor_folders = []
     direct_folder = None
 
+    folder_owner_perm = 0
     if shared_doctype == "Vault Secret":
         res = frappe.db.get_value("Vault Secret", shared_name, ["owner", "folder"])
         doc_owner, doc_folder = res if res else (None, None)
@@ -49,12 +50,12 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
             except Exception:
                 pass
 
-            # If the user owns the folder or any ancestor folder, they get Edit access to secrets inside, not Full Control
+            # If the user owns the folder or any ancestor folder, grant Edit as fallback without capping explicit Full Control
             folder_owners = frappe.db.get_all(
                 "Vault Folder", filters={"name": ("in", doc_folders)}, pluck="owner"
             )
             if user in folder_owners:
-                return 3
+                folder_owner_perm = 3
 
     elif shared_doctype == "Vault Folder":
         direct_folder = shared_name
@@ -98,7 +99,7 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
     )
     if user_shares:
         highest = max(user_shares, key=lambda s: PERM_HIERARCHY.get(s.permission_level, 0))
-        return PERM_HIERARCHY.get(highest.permission_level, 1)
+        return max(PERM_HIERARCHY.get(highest.permission_level, 1), folder_owner_perm)
 
     # Active Role Shares
     active_role_shares = []
@@ -142,13 +143,13 @@ def get_effective_user_permission(shared_doctype: str, shared_name: str, user: s
         if role_overrides:
             override = role_overrides[0]
             if override.is_revoked:
-                return 0
-            return PERM_HIERARCHY.get(override.permission_level, 1)
+                return folder_owner_perm
+            return max(PERM_HIERARCHY.get(override.permission_level, 1), folder_owner_perm)
 
         highest_role = max(active_role_shares, key=lambda s: PERM_HIERARCHY.get(s.permission_level, 0))
-        return PERM_HIERARCHY.get(highest_role.permission_level, 1)
+        return max(PERM_HIERARCHY.get(highest_role.permission_level, 1), folder_owner_perm)
 
-    return 0
+    return folder_owner_perm
 
 
 def get_secret_permission_query(user=None):
