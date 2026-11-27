@@ -26,3 +26,9 @@ frappe_vault/www/vault.html
 frontend/auto-imports.d.ts
 frontend/components.d.ts
 frappe_vault/public/node_modules
+
+# Test artifacts & reports
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/e2e/.auth/
